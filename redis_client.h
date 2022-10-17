@@ -90,7 +90,7 @@ class RedisConfig {
   int num_redis_socks_;
   int connect_timeout_;              // ms
   int net_readwrite_timeout_;        // ms
-  int connect_failure_retry_delay_;  // ms
+  int connect_failure_retry_delay_;  // seconds
 };
 
 /**
@@ -99,8 +99,8 @@ class RedisConfig {
  */
 class RedisSocket {
  public:
-  enum SocketState { unconnected = 0, connected };
-  RedisSocket() {}
+  enum SocketStatus { unconnected = 0, connected };
+  RedisSocket(int id) : id_(id), inuse_(0), state_(unconnected), ctx_(NULL) {}
   ~RedisSocket() { close(); }
 
   int connect(const RedisConfig* config);
@@ -109,12 +109,20 @@ class RedisSocket {
   void* redis_vcommand(const RedisConfig* config, const char* format,
                        va_list ap);
 
-  // should be private later
-  int id;      // socket序号
-  int backup;  // 备用endpoints
-  pthread_mutex_t mutex;
-  int inuse;
-  enum SocketState state;
+  int id() { return id_; }
+  int backup() { return backup_; }
+  void set_backup(int backup) { backup_ = backup; }
+  int inuse() { return inuse_; }
+  void set_inuse(int inuse) { inuse_ = inuse; }
+  int state() { return state_; }
+  pthread_mutex_t& mutex() { return mutex_; }
+
+ private:
+  int id_;      // socket序号
+  int backup_;  // 备用endpoints序号
+  pthread_mutex_t mutex_;
+  int inuse_;
+  enum SocketStatus state_;
   redisContext* ctx_;
 };
 
@@ -183,8 +191,10 @@ class RedisReplyPtr {
  public:
   explicit RedisReplyPtr(void* p = 0) : p_((redisReply*)p) {}
   ~RedisReplyPtr() {
-    printf("freeReplyObject %p\n", (void*)p_);
-    freeReplyObject(p_);
+    if (p_) {
+      printf("Released redis reply %p\n", (void*)p_);
+      freeReplyObject(p_);
+    }
   }
 
   // move contructor

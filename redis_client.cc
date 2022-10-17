@@ -20,7 +20,7 @@ RedisReplyPtr RedisClient::redisvCommand(const char *format, va_list ap) {
     reply = socket->redis_vcommand(inst_->config(), format, ap);
   } else {
     printf(
-        "Can not get socket from redis connection pool, server down? or not"
+        "Can not get socket from redis connection pool, server down? or not "
         "enough connection?\n");
   }
 
@@ -49,8 +49,8 @@ int RedisClient::create_inst(const RedisConfig &config) {
   }
 
   printf(
-      "Attempting to connect to above endpoints with connect_timeout %d "
-      "net_readwrite_timeout %d\n",
+      "Attempting to connect to above endpoints with connect_timeout %dms "
+      "net_readwrite_timeout %dms\n",
       config.connect_timeout(), config.net_readwrite_timeout());
 
   if (inst->create_pool() < 0) {
@@ -73,15 +73,12 @@ int RedisInstance::create_pool() {
   connect_after_ = 0;
 
   for (int i = 0; i < config_->num_redis_socks(); i++) {
-    RedisSocket *socket = new RedisSocket;
-    socket->id = i;
-    socket->backup = i % config_->num_endpoints();
-    socket->ctx_ = NULL;
-    socket->inuse = 0;
+    RedisSocket *socket = new RedisSocket(i);
+    socket->set_backup(i % config_->num_endpoints());
 
-    int rcode = pthread_mutex_init(&socket->mutex, NULL);
+    int rcode = pthread_mutex_init(&socket->mutex(), NULL);
     if (rcode != 0) {
-      printf("Failed to init lock: returns (%d)", rcode);
+      printf("Failed to init lock: returns (%d)\n", rcode);
       delete socket;
       return -1;
     }
@@ -107,10 +104,15 @@ void RedisInstance::destory_pool() {
   std::vector<RedisSocket *>().swap(pool_);
 }
 
+/**
+ * @brief search a available socket from pool by thread lock
+ *
+ * @return RedisSocket* the return value should not be close
+ */
 RedisSocket *RedisInstance::pop_socket() {
   int rcode;
-  int tried_to_connect = 0;
-  int unconnected = 0;
+  int num_tried_to_connect = 0;
+  int num_faild_to_connected = 0;
 
   for (const auto &socket : pool_) {
     /*
@@ -119,19 +121,19 @@ RedisSocket *RedisInstance::pop_socket() {
      *
      *  If it isn't used, then grab it ourselves.
      */
-    if ((rcode = pthread_mutex_trylock(&socket->mutex)) != 0)
+    if ((rcode = pthread_mutex_trylock(&socket->mutex())) != 0)
       continue;
     else /* else we now have the lock */
-      printf("Obtained lock with handle %d\n", socket->id);
+      printf("Obtained lock with socket #%d\n", socket->id());
 
-    if (socket->inuse == 1) {
-      if ((rcode = pthread_mutex_unlock(&socket->mutex)) != 0)
-        printf("Failed release lock with handle %d: returns (%d)", socket->id,
-               rcode);
+    if (socket->inuse() == 1) {
+      if ((rcode = pthread_mutex_unlock(&socket->mutex())) != 0)
+        printf("Failed release lock with socket #%d: returns (%d)\n",
+               socket->id(), rcode);
       else
-        printf("Released lock with handle %d\n", socket->id);
+        printf("Released lock with socket #%d\n", socket->id());
     } else
-      socket->inuse = 1;
+      socket->set_inuse(1);
 
     /*
      *  If we happen upon an unconnected socket, and
@@ -139,37 +141,38 @@ RedisSocket *RedisInstance::pop_socket() {
      *  (re)connecting has expired, then try to
      *  connect it.  This should be really rare.
      */
-    if ((socket->state == RedisSocket::unconnected) &&
+    if ((socket->state() == RedisSocket::unconnected) &&
         (time(NULL) > connect_after_)) {
-      printf("Trying to (re)connect unconnected handle %d ...", socket->id);
-      tried_to_connect++;
+      printf("Trying to (re)connect unconnected socket #%d ...\n",
+             socket->id());
+      num_tried_to_connect++;
       socket->connect(config_);
     }
 
-    /* if we still aren't connected, ignore this handle */
-    if (socket->state == RedisSocket::unconnected) {
-      printf("Ignoring unconnected handle %d ...", socket->id);
-      unconnected++;
+    /* if we still aren't connected, ignore this socket */
+    if (socket->state() == RedisSocket::unconnected) {
+      printf("Ignoring unconnected socket #%d ...\n", socket->id());
+      num_faild_to_connected++;
 
-      socket->inuse = 0;
+      socket->set_inuse(0);
 
-      if ((rcode = pthread_mutex_unlock(&socket->mutex)) != 0) {
-        printf("Failed to release lock with handle %d: returns (%d)",
-               socket->id, rcode);
+      if ((rcode = pthread_mutex_unlock(&socket->mutex())) != 0) {
+        printf("Failed to release lock with socket #%d: returns (%d)\n",
+               socket->id(), rcode);
       } else {
-        printf("Released lock with handle %d\n", socket->id);
+        printf("Released lock with socket #%d\n", socket->id());
       }
 
       continue;
     }
 
     /* should be connected, grab it */
-    printf("Obtained redis socket id: %d\n", socket->id);
-    if (unconnected != 0 || tried_to_connect != 0) {
+    printf("Poped redis socket #%d\n", socket->id());
+    if (num_faild_to_connected != 0 || num_tried_to_connect != 0) {
       printf(
-          "got socket %d after skipping %d unconnected handles, "
-          "tried to reconnect %d though",
-          socket->id, unconnected, tried_to_connect);
+          "Got socket #%d after skipping %d unconnected sockets, "
+          "tried to reconnect %d though\n",
+          socket->id(), num_faild_to_connected, num_tried_to_connect);
     }
 
     /*
@@ -188,10 +191,10 @@ RedisSocket *RedisInstance::pop_socket() {
     return socket;
   }
 
-  /* We get here if every redis handle is unconnected and
+  /* We get here if every redis socket is unconnected and
    * unconnectABLE, or in use */
-  printf("There are no redis handles to use! skipped %d, tried to connect %d",
-         unconnected, tried_to_connect);
+  printf("There are no redis sockets to use! skipped %d, tried to connect %d\n",
+         num_faild_to_connected, num_tried_to_connect);
   return NULL;
 }
 
@@ -200,20 +203,20 @@ void RedisInstance::push_socket(RedisSocket *socket) {
 
   if (socket == NULL) return;
 
-  if (socket->inuse != 1) {
-    printf("I'm NOT in use while pushing. Bug?");
+  if (socket->inuse() != 1) {
+    printf("I'm NOT in use while pushing. Bug?\n");
   }
 
-  socket->inuse = 0;
+  socket->set_inuse(0);
 
-  if ((rcode = pthread_mutex_unlock(&socket->mutex)) != 0) {
-    printf("Can not release lock with handle %d: returns (%d)", socket->id,
+  if ((rcode = pthread_mutex_unlock(&socket->mutex())) != 0) {
+    printf("Can not release lock with socket %d: returns (%d)\n", socket->id(),
            rcode);
   } else {
-    printf("Released lock with handle %d\n", socket->id);
+    printf("Released lock with socket %d\n", socket->id());
   }
 
-  printf("Released redis socket id: %d", socket->id);
+  printf("Pushed redis socket #%d\n", socket->id());
 
   return;
 }
@@ -234,7 +237,7 @@ int RedisSocket::connect(const RedisConfig *config) {
   redisContext *ctx = NULL;
   struct timeval timeout[2];
 
-  printf("Attempting to connect #%d @%d\n", id, backup);
+  printf("Attempting to connect #%d @%d\n", id_, backup_);
 
   /* convert timeout (ms) to timeval */
   timeout[0].tv_sec = config->connect_timeout() / 1000;
@@ -246,18 +249,18 @@ int RedisSocket::connect(const RedisConfig *config) {
     /*
      * Get the target host/port or unix path from the backup index
      */
-    const string &unix_path = config->endpoints()[backup].unix_path();
+    const string &unix_path = config->endpoints()[backup_].unix_path();
     if (!unix_path.empty()) {
       ctx = redisConnectUnixWithTimeout(unix_path.c_str(), timeout[0]);
     } else {
-      const string &host = config->endpoints()[backup].host();
-      int port = config->endpoints()[backup].port();
+      const string &host = config->endpoints()[backup_].host();
+      int port = config->endpoints()[backup_].port();
       ctx = redisConnectWithTimeout(host.c_str(), port, timeout[0]);
     }
 
     while (ctx && ctx->err == 0) {
       // Redis authentication,
-      const string &authpwd = config->endpoints()[backup].authpwd();
+      const string &authpwd = config->endpoints()[backup_].authpwd();
       if (!authpwd.empty()) {
         redisReply *r =
             (redisReply *)redisCommand(ctx, "AUTH %s", authpwd.c_str());
@@ -272,13 +275,13 @@ int RedisSocket::connect(const RedisConfig *config) {
         if (r) freeReplyObject(r);
       }
 
-      printf("Connected new redis handle #%d @%d\n", id, backup);
+      printf("Connected new redis socket #%d @%d\n", id_, backup_);
       ctx_ = ctx;
-      state = connected;
+      state_ = connected;
       if (config->num_endpoints() > 1) {
         /* Select the next _random_ endpoint as the new backup if succeed*/
-        backup = (backup + (1 + rand() % (config->num_endpoints() - 1))) %
-                 config->num_endpoints();
+        backup_ = (backup_ + (1 + rand() % (config->num_endpoints() - 1))) %
+                  config->num_endpoints();
       }
 
       if (redisSetTimeout(ctx, timeout[1]) != REDIS_OK) {
@@ -297,41 +300,45 @@ int RedisSocket::connect(const RedisConfig *config) {
 
     /* We have more backups to try */
     if (ctx) {
-      printf("Failed to connect redis handle #%d @%d: %s\n", id, backup,
+      printf("Failed to connect redis socket #%d @%d: %s\n", id_, backup_,
              ctx->errstr);
       redisFree(ctx);
     } else {
-      printf("Failed to allocate redis handle #%d @%d\n", id, backup);
+      printf("Failed to allocate redis socket #%d @%d\n", id_, backup_);
     }
 
     /* We have tried the last one but still fail */
     if (i == config->num_endpoints() - 1) break;
 
     /* Select the next endpoint as the new backup to retry if failed*/
-    backup = (backup + 1) % config->num_endpoints();
+    backup_ = (backup_ + 1) % config->num_endpoints();
   }
 
   /*
    *  Error, or SERVER_DOWN.
    */
   ctx_ = NULL;
-  state = unconnected;
+  state_ = unconnected;
 
   return -1;
 }
 
+/**
+ * @brief disconnect to redis server
+ * free redisContext and release thread lock
+ */
 void RedisSocket::close() {
-  printf("Closing redis socket state=%d #%d @%d\n", state, id, backup);
+  printf("Closing redis socket #%d @%d, state=%d\n", id_, backup_, state_);
 
-  if (state == connected) {
+  if (state_ == connected) {
     redisFree(ctx_);
   }
 
-  if (inuse) {
+  if (inuse_) {
     printf("I'm still in use while closing. Bug?\n");
   }
 
-  int rcode = pthread_mutex_destroy(&mutex);
+  int rcode = pthread_mutex_destroy(&mutex_);
   if (rcode != 0) {
     printf("Failed to destroy lock: returns (%d)\n", rcode);
   }
@@ -352,6 +359,8 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
     /* Once an error is returned the context cannot be reused and you shoud
        set up a new connection.
      */
+
+    printf("Failed to redisvCommand\n");
 
     /* close the socket that failed */
     redisFree(ctx_);
