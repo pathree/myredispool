@@ -1,8 +1,9 @@
 
-RPMBUILD_DIR?=  $(CURDIR)/rpmbuild
-SPEC_FILE=	myredispool.spec
-DIST_FILES=	src
-
+RPMBUILD_TOPDIR:=  $(CURDIR)/rpmbuild
+SPEC_FILE:=	myredispool.spec
+DIST_FILES:=	src
+VERSION:=	0.0.1
+RELEASE:=	$(shell git rev-list HEAD --count)
 
 .PHONY: all
 all:
@@ -13,13 +14,15 @@ all:
 
 .PHONY: rpm
 rpm:
-	rm -rf $(RPMBUILD_DIR)
-	mkdir -p $(RPMBUILD_DIR)/BUILD
-	cp -ar $(DIST_FILES) $(RPMBUILD_DIR)/BUILD
+	rm -rf $(RPMBUILD_TOPDIR)
+	mkdir -p $(RPMBUILD_TOPDIR)/BUILD
+	cp -ar $(DIST_FILES) $(RPMBUILD_TOPDIR)/BUILD
 	rpmbuild -bb -v \
-		--define='_topdir $(RPMBUILD_DIR)' \
+		--define='_topdir $(RPMBUILD_TOPDIR)' \
+		--define='_version $(VERSION)' \
+		--define='_release $(RELEASE)' \
 		$(SPEC_FILE)
 	
 .PHONY: clean
 clean:
-	rm -rf $(RPMBUILD_DIR)
+	rm -rf $(RPMBUILD_TOPDIR)
