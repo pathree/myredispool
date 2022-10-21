@@ -16,15 +16,14 @@ Ref: https://github.com/aclisp/hiredispool
 %prep
 
 %build
-cd src && make clean && make 
+make build
 
 %install
-rm -rf %{buildroot}
-mkdir -p %{buildroot}/%{_bindir}
-cp src/redis_test %{buildroot}/%{_bindir}
+make install DESTDIR=%{buildroot}
 
 %files
-%{_bindir}/redis_test
+/usr/local/lib/libmy_redis_pool.so
+/usr/local/bin/redis_test
 
 #%doc
 

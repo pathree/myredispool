@@ -1,16 +1,20 @@
 
 RPMBUILD_TOPDIR:=  $(CURDIR)/rpmbuild
 SPEC_FILE:=	myredispool.spec
-DIST_FILES:=	src
+DIST_FILES:=	Makefile src
 VERSION:=	0.0.1
 RELEASE:=	$(shell git rev-list HEAD --count)
 
 .PHONY: all
-all:
-	@echo
-	@echo 'make rpm to build RPM package'
-	@echo
+all: build
 
+.PHONY: build
+build:
+	cd src && $(MAKE)
+
+.PHONY: install
+install:
+	cd src && $(MAKE) install
 
 .PHONY: rpm
 rpm:
