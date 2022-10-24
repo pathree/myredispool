@@ -23,8 +23,9 @@ redis_test: $(OBJS) $(HEADERS)
 
 .PHONY: install
 install:
-	install -Dm 0644 libmy_redis_pool.so $(DESTDIR)/usr/local/lib/libmy_redis_pool.so
-	install -Dm 0755 redis_test $(DESTDIR)/usr/local/bin/redis_test
+	install -d $(DESTDIR)/usr/local/bin $(DESTDIR)/usr/local/lib
+	install -m 0755 redis_test $(DESTDIR)/usr/local/bin/
+	install -m 0644 libmy_redis_pool.so $(DESTDIR)/usr/local/lib
  
 .PHONY : clean
 clean : 
