@@ -10,6 +10,8 @@ Requires:	redis >= 3.2.12
 
 %description
 Ref: https://github.com/aclisp/hiredispool
+Ref: https://rpm-packaging-guide.github.io
+Ref: https://docs.fedoraproject.org/en-US/packaging-guidelines/RPMMacros
 + Rewrite the hiredispool with pure C++
 + Support unix path
 
@@ -25,7 +27,7 @@ make install DESTDIR=%{buildroot}
 /usr/local/lib/libmy_redis_pool.so
 /usr/local/bin/redis_test
 
-#%doc
+%doc
 
 %clean
 rm -rf %{buildroot}

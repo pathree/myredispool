@@ -19,7 +19,7 @@ install:
 .PHONY: rpm
 rpm:
 	rm -rf $(RPMBUILD_TOPDIR)
-	mkdir -p $(RPMBUILD_TOPDIR)/BUILD
+	install  -d $(RPMBUILD_TOPDIR)/BUILD
 	cp -ar $(DIST_FILES) $(RPMBUILD_TOPDIR)/BUILD
 	rpmbuild -bb -v \
 		--define='_topdir $(RPMBUILD_TOPDIR)' \

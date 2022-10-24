@@ -62,14 +62,16 @@ void *run(void *arg) {
 
 int main(int argc, char **argv) {
   int num_redis_socks = 1;
-  const RedisEndpoint endpoints[] = {{"127.0.0.1", 6379, "slc360"},
-                                     {"/var/run/redis.sock", "slc360"}};
+  const RedisEndpoint endpoints[] = {
+      {"127.0.0.1", 6379, "slc360"},
+      //{"/var/run/redis.sock", "slc360"}
+  };
   RedisConfig config((const RedisEndpoint *)endpoints,
                      sizeof(endpoints) / sizeof(RedisEndpoint), num_redis_socks,
                      10000, 5000, 1);
   RedisClient client(config);
 
-  test(client);
+  while (1) test(client);
   return 0;
 
   int num_of_thread = 1;

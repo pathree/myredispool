@@ -146,7 +146,9 @@ RedisSocket *RedisInstance::pop_socket() {
       printf("Trying to (re)connect unconnected socket #%d ...\n",
              socket->id());
       num_tried_to_connect++;
-      socket->connect(config_);
+      if (socket->connect(config_) != 0) {
+        connect_after_ = time(NULL) + config_->connect_failure_retry_delay();
+      }
     }
 
     /* if we still aren't connected, ignore this socket */
