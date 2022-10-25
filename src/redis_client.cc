@@ -362,6 +362,11 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
        set up a new connection.
      */
 
+    /* 如果使用unix socket成功建立redisContext, 在redis server down后,
+     * 重用redisContext上执行命令, 会导致hiredis库崩溃. 因此，使用unix
+     * socket方式不适合做连接池
+     */
+
     printf("Failed to redisvCommand\n");
 
     /* close the socket that failed */
