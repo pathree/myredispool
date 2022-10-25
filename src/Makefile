@@ -12,10 +12,10 @@ TARGET= libmy_redis_pool.so redis_test
 
 .PHONY: all
 all: $(TARGET)
-libmy_redis_pool.so: $(OBJS) $(HEADERS)
+libmy_redis_pool.so: $(OBJS)
 	$(LD) -shared -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
-redis_test: $(OBJS) $(HEADERS)
+redis_test: $(OBJS) 
 	$(LD) -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
 %.o: %.cc $(HEADERS)
