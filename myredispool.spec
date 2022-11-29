@@ -1,7 +1,7 @@
 Name:		myredispool	
 Version:	%{_version}	
 Release:	%{_release}%{?dist}
-Summary:	A hiredispool rewriten with pure C++
+Summary:	A hiredispool rewriten with pure C++ (%{_commit})
 License:	GPL
 URL:		https://github.com/pathree/myredispool.git
 
