@@ -18,8 +18,16 @@ libmy_redis_pool.so: $(OBJS)
 redis_test: $(OBJS) 
 	$(LD) -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
-%.o: %.cc $(HEADERS)
+test: sample/test.o
+	$(LD) -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
+
+%.o: %.cc $(HEADERS) $(wildcard sample/*.h)
 	$(CC) -c $< -o $@ $(CXXFLAGS)
+
+.PHONY: run
+run: test
+	@./test
+
 
 .PHONY: install
 install:
@@ -29,4 +37,4 @@ install:
  
 .PHONY : clean
 clean : 
-	rm -f $(TARGET) *.o 
+	rm -f $(TARGET) *.o test sample/*.o 
