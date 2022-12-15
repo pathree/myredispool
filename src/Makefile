@@ -18,10 +18,11 @@ libmy_redis_pool.so: $(OBJS)
 redis_test: $(OBJS) 
 	$(LD) -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
-test: sample/test.o
+test: sample/test.o sample/lock.o sample/person.o sample/pimpl.o
 	$(LD) -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
-%.o: %.cc $(HEADERS) $(wildcard sample/*.h)
+#%.o: %.cc $(HEADERS) $(wildcard sample/*.h)
+%.o: %.cc $(HEADERS)
 	$(CC) -c $< -o $@ $(CXXFLAGS)
 
 .PHONY: run
