@@ -141,7 +141,7 @@ RedisSocket *RedisInstance::pop_socket() {
     if (!socket->mutex().try_lock())
       continue;
     else /* else we now have the lock */
-      printf("Obtained lock with socket #%d\n", socket->id());
+      x_debug_lock("Obtained lock of socket #%d\n", socket->id());
 
     /*
      *  If we happen upon an unconnected socket, and
@@ -165,7 +165,7 @@ RedisSocket *RedisInstance::pop_socket() {
       num_faild_to_connected++;
 
       socket->mutex().unlock();
-      printf("Released lock with socket #%d\n", socket->id());
+      x_debug_lock("Released lock of socket #%d\n", socket->id());
 
       continue;
     }
@@ -206,7 +206,7 @@ void RedisInstance::push_socket(RedisSocket *socket) {
   if (socket == NULL) return;
 
   socket->mutex().unlock();
-  printf("Released lock with socket #%d\n", socket->id());
+  x_debug_lock("Released lock of socket #%d\n", socket->id());
 
   printf("Pushed redis socket #%d\n", socket->id());
 
@@ -362,7 +362,7 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
         /* do not need clean up here because the next caller will retry. */
       }
     } else {
-      printf("Reconnect failed, server down?\n");
+      printf("Reconnect failed, maybe server down\n");
     }
   }
 

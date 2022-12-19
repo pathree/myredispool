@@ -76,7 +76,7 @@ void *run(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  int num_redis_socks = 2;
+  int num_redis_socks = 1;
   int connect_timeout = 5000;           // ms
   int net_readwrite_timeout = 1000;     // ms
   int connect_failure_retry_delay = 1;  // seconds
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
 
   // while (1) test(client);
 
-  int num_of_thread = 2;
+  int num_of_thread = num_redis_socks;
   pthread_t tid[num_of_thread];
   for (int i = 0; i < num_of_thread; i++) {
     pthread_create(&tid[i], NULL, run, &client);

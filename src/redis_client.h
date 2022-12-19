@@ -27,6 +27,12 @@ using std::string;
 
 #define MAX_REDIS_SOCKS 1000
 
+// #define x_debug_lock(...) printf(__VA_ARGS__)
+#define x_debug_lock(...)
+// #define x_debug_reply(...) printf(__VA_ARGS__)
+#define x_debug_reply(...)
+#define x_debug_socket(...) printf(__VA_ARGS__)
+
 /**
  * @brief Redis服务端点
  *    + 支持地址端口和UnixSocket接入
@@ -123,10 +129,11 @@ class RedisReply {
  public:
   explicit RedisReply() {}
   explicit RedisReply(void* reply) {
-    ptr_.reset((redisReply*)reply, [](redisReply* r) {
+    x_debug_reply("Got redis reply %p\n", (void*)reply);
+    ptr_.reset((redisReply*)reply, [](redisReply* reply) {
       /*引用计数为0时，调用删除器释放redisReply*/
-      // printf("Released redis reply %p\n", (void*)r);
-      freeReplyObject(r);
+      x_debug_reply("Released redis reply %p\n", reply);
+      freeReplyObject(reply);
     });
   }
 
