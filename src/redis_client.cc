@@ -30,28 +30,26 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
 }
 
 int RedisClient::create_inst(const RedisConfig &config) {
-  RedisInstance *inst;
-
-  inst = new RedisInstance(config);
+  RedisInstance *inst = NULL;
 
   /* Check config */
-  if (config.num_endpoints() < 1) {
+  if (config.num_endpoints < 1) {
     printf("Must provide 1 redis endpoint\n");
-    delete inst;
     return -1;
   }
 
-  if (config.num_redis_socks() > MAX_REDIS_SOCKS) {
+  if (config.num_redis_socks > MAX_REDIS_SOCKS) {
     printf("Number of redis sockets(% d) cannot exceed MAX_REDIS_SOCKS(% d)\n",
-           config.num_redis_socks(), MAX_REDIS_SOCKS);
-    delete inst;
+           config.num_redis_socks, MAX_REDIS_SOCKS);
     return -1;
   }
 
   printf(
       "Attempting to connect to above endpoints with connect_timeout %dms "
       "net_readwrite_timeout %dms\n",
-      config.connect_timeout(), config.net_readwrite_timeout());
+      config.connect_timeout, config.net_readwrite_timeout);
+
+  inst = new RedisInstance(config);
 
   if (inst->create_pool() < 0) {
     delete inst;
@@ -69,15 +67,38 @@ void RedisClient::destroy_inst() {
   }
 }
 
+RedisInstance::RedisInstance(const RedisConfig &config) {
+  config_ = new RedisConfig(config);
+
+  if (config.num_endpoints > 0) {
+    RedisEndpoint *endpoints = new RedisEndpoint[config.num_endpoints];
+    for (int i = 0; i < config.num_endpoints; i++) {
+      endpoints[i] = config.endpoints[i];
+    }
+
+    config_->endpoints = endpoints;
+  }
+}
+
+RedisInstance::~RedisInstance() {
+  if (config_ != NULL) {
+    if (config_->endpoints != NULL) delete[] config_->endpoints;
+    delete config_;
+    config_ = NULL;
+  }
+
+  destory_pool();
+}
+
 int RedisInstance::create_pool() {
   connect_after_ = 0;
 
-  for (int i = 0; i < config_->num_redis_socks(); i++) {
+  for (int i = 0; i < config_->num_redis_socks; i++) {
     RedisSocket *socket = new RedisSocket(i);
-    socket->set_backup(i % config_->num_endpoints());
+    socket->set_backup(i % config_->num_endpoints);
 
     if (socket->connect(config_) != 0) {
-      connect_after_ = time(NULL) + config_->connect_failure_retry_delay();
+      connect_after_ = time(NULL) + config_->connect_failure_retry_delay;
       printf("Failed to connect to any redis server\n");
     }
 
@@ -134,7 +155,7 @@ RedisSocket *RedisInstance::pop_socket() {
              socket->id());
       num_tried_to_connect++;
       if (socket->connect(config_) != 0) {
-        connect_after_ = time(NULL) + config_->connect_failure_retry_delay();
+        connect_after_ = time(NULL) + config_->connect_failure_retry_delay;
       }
     }
 
@@ -211,30 +232,29 @@ int RedisSocket::connect(const RedisConfig *config) {
   printf("Attempting to connect #%d @%d\n", id_, backup_);
 
   /* convert timeout (ms) to timeval */
-  timeout[0].tv_sec = config->connect_timeout() / 1000;
-  timeout[0].tv_usec = 1000 * (config->connect_timeout() % 1000);
-  timeout[1].tv_sec = config->net_readwrite_timeout() / 1000;
-  timeout[1].tv_usec = 1000 * (config->net_readwrite_timeout() % 1000);
+  timeout[0].tv_sec = config->connect_timeout / 1000;
+  timeout[0].tv_usec = 1000 * (config->connect_timeout % 1000);
+  timeout[1].tv_sec = config->net_readwrite_timeout / 1000;
+  timeout[1].tv_usec = 1000 * (config->net_readwrite_timeout % 1000);
 
-  for (i = 0; i < config->num_endpoints(); i++) {
+  for (i = 0; i < config->num_endpoints; i++) {
     /*
      * Get the target host/port or unix path from the backup index
      */
-    const string &unix_path = config->endpoints()[backup_].unix_path();
-    if (!unix_path.empty()) {
-      ctx = redisConnectUnixWithTimeout(unix_path.c_str(), timeout[0]);
+    const char *unix_path = config->endpoints[backup_].unix_path;
+    if (unix_path[0]) {
+      ctx = redisConnectUnixWithTimeout(unix_path, timeout[0]);
     } else {
-      const string &host = config->endpoints()[backup_].host();
-      int port = config->endpoints()[backup_].port();
-      ctx = redisConnectWithTimeout(host.c_str(), port, timeout[0]);
+      const char *host = config->endpoints[backup_].host;
+      int port = config->endpoints[backup_].port;
+      ctx = redisConnectWithTimeout(host, port, timeout[0]);
     }
 
     while (ctx && ctx->err == 0) {
       // Redis authentication,
-      const string &authpwd = config->endpoints()[backup_].authpwd();
-      if (!authpwd.empty()) {
-        redisReply *r =
-            (redisReply *)redisCommand(ctx, "AUTH %s", authpwd.c_str());
+      const char *authpwd = config->endpoints[backup_].authpwd;
+      if (authpwd[0]) {
+        redisReply *r = (redisReply *)redisCommand(ctx, "AUTH %s", authpwd);
         if (r == NULL || r->type == REDIS_REPLY_ERROR) {
           if (r) {
             printf("Failed to auth: %s\n", r->str);
@@ -249,10 +269,10 @@ int RedisSocket::connect(const RedisConfig *config) {
       printf("Connected new redis socket #%d @%d\n", id_, backup_);
       ctx_ = ctx;
       state_ = connected;
-      if (config->num_endpoints() > 1) {
+      if (config->num_endpoints > 1) {
         /* Select the next _random_ endpoint as the new backup if succeed*/
-        backup_ = (backup_ + (1 + rand() % (config->num_endpoints() - 1))) %
-                  config->num_endpoints();
+        backup_ = (backup_ + (1 + rand() % (config->num_endpoints - 1))) %
+                  config->num_endpoints;
       }
 
       if (redisSetTimeout(ctx, timeout[1]) != REDIS_OK) {
@@ -260,7 +280,7 @@ int RedisSocket::connect(const RedisConfig *config) {
                (ctx->flags & REDIS_BLOCK), ctx->errstr);
       }
 
-      if (unix_path.empty()) {
+      if (!unix_path[0]) {
         if (redisEnableKeepAlive(ctx) != REDIS_OK) {
           printf("Failed to enable keepalive: %s\n", ctx->errstr);
         }
@@ -279,10 +299,10 @@ int RedisSocket::connect(const RedisConfig *config) {
     }
 
     /* We have tried the last one but still fail */
-    if (i == config->num_endpoints() - 1) break;
+    if (i == config->num_endpoints - 1) break;
 
     /* Select the next endpoint as the new backup to retry if failed*/
-    backup_ = (backup_ + 1) % config->num_endpoints();
+    backup_ = (backup_ + 1) % config->num_endpoints;
   }
 
   /*

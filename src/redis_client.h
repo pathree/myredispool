@@ -33,24 +33,11 @@ using std::string;
  *    + 支持Auth认证
  *
  */
-class RedisEndpoint {
- public:
-  RedisEndpoint() {}
-  RedisEndpoint(const string& host, int port, const string& authpwd = "")
-      : host_(host), port_(port), authpwd_(authpwd){};
-  RedisEndpoint(const string& unix_path, const string& authpwd = "")
-      : unix_path_(unix_path), authpwd_(authpwd){};
-
-  const string& host() const { return host_; }
-  const int& port() const { return port_; }
-  const string& unix_path() const { return unix_path_; }
-  const string& authpwd() const { return authpwd_; }
-
- private:
-  string host_;
-  int port_;
-  string unix_path_;
-  string authpwd_;
+struct RedisEndpoint {
+  char host[256];
+  int port;
+  char unix_path[256];
+  char authpwd[256];
 };
 
 /**
@@ -58,41 +45,13 @@ class RedisEndpoint {
  *    + 包括端点、连接池大小、连接超时、读写超时、重试延迟
  *
  */
-class RedisConfig {
- public:
-  RedisConfig(const RedisEndpoint* endpoints, int num_endpoints,
-              int num_redis_socks = 5, int connect_timeout = 10000,
-              int net_readwrite_timeout = 5000,
-              int connect_failure_retry_delay = 1)
-      : endpoints_(endpoints),
-        num_endpoints_(num_endpoints),
-        num_redis_socks_(num_redis_socks),
-        connect_timeout_(connect_timeout),
-        net_readwrite_timeout_(net_readwrite_timeout),
-        connect_failure_retry_delay_(connect_failure_retry_delay) {}
-
-  ~RedisConfig() {}
-
-  const RedisEndpoint* endpoints() const { return endpoints_; }
-  void set_endpoints(RedisEndpoint* endpoints, int num_endpoints) {
-    endpoints_ = endpoints;
-    num_endpoints_ = num_endpoints;
-  }
-  int num_endpoints() const { return num_endpoints_; }
-  int num_redis_socks() const { return num_redis_socks_; }
-  int connect_timeout() const { return connect_timeout_; }
-  int net_readwrite_timeout() const { return net_readwrite_timeout_; }
-  int connect_failure_retry_delay() const {
-    return connect_failure_retry_delay_;
-  }
-
- private:
-  const RedisEndpoint* endpoints_;
-  int num_endpoints_;
-  int num_redis_socks_;
-  int connect_timeout_;              // ms
-  int net_readwrite_timeout_;        // ms
-  int connect_failure_retry_delay_;  // seconds
+struct RedisConfig {
+  RedisEndpoint* endpoints;
+  int num_endpoints;
+  int num_redis_socks;
+  int connect_timeout;              // ms
+  int net_readwrite_timeout;        // ms
+  int connect_failure_retry_delay;  // seconds
 };
 
 /**
@@ -131,11 +90,8 @@ class RedisSocket {
  */
 class RedisInstance {
  public:
-  RedisInstance(const RedisConfig& config) { set_config(config); }
-  ~RedisInstance() {
-    free_config();
-    destory_pool();
-  }
+  RedisInstance(const RedisConfig& config);
+  ~RedisInstance();
 
   const RedisConfig* config() const { return config_; }
 
@@ -151,29 +107,6 @@ class RedisInstance {
   void push_socket(RedisSocket* socket);
 
  private:
-  void set_config(const RedisConfig& config) {
-    free_config();
-
-    config_ = new RedisConfig(config);
-    config_->set_endpoints(NULL, 0);
-
-    if (config.num_endpoints() > 0) {
-      RedisEndpoint* endpoints = new RedisEndpoint[config.num_endpoints()];
-      for (int i = 0; i < config.num_endpoints(); i++) {
-        endpoints[i] = config.endpoints()[i];
-      }
-      config_->set_endpoints(endpoints, config.num_endpoints());
-    }
-  }
-
-  void free_config() {
-    if (config_ != NULL) {
-      if (config_->endpoints() != NULL) delete[] config_->endpoints();
-      delete config_;
-      config_ = NULL;
-    }
-  }
-
   time_t connect_after_;
   RedisConfig* config_;
   std::vector<RedisSocket*> pool_;

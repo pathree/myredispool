@@ -58,7 +58,7 @@ void *run(void *arg) {
   RedisReply reply =
       client->redisCommand("SET %s %s", key.c_str(), value.c_str());
   if (reply)
-    std::cout << "SET: " << value << " on " << &reply << std::endl;
+    std::cout << "SET: " << value << " OK" << std::endl;
   else
     std::cout << "SET: Something wrong." << std::endl;
 
@@ -67,7 +67,7 @@ void *run(void *arg) {
     if (reply->type == REDIS_REPLY_NIL)
       std::cout << "GET: Key does not exist." << std::endl;
     else
-      std::cout << "GET: " << reply->str << " on " << &reply << std::endl;
+      std::cout << "GET: " << reply->str << " OK" << std::endl;
   } else
     std::cout << "GET: "
               << "Something wrong." << std::endl;
@@ -77,13 +77,23 @@ void *run(void *arg) {
 
 int main(int argc, char **argv) {
   int num_redis_socks = 2;
-  const RedisEndpoint endpoints[] = {
-      {"127.0.0.1", 6379, "slc360"},
-      //{"/var/run/redis.sock", "slc360"}
+  int connect_timeout = 5000;           // ms
+  int net_readwrite_timeout = 1000;     // ms
+  int connect_failure_retry_delay = 1;  // seconds
+
+  RedisEndpoint endpoints[] = {
+      {"127.0.0.1", 6379, "", "slc360"},
+      //{"127.0.0.1", 6380, "", "slc360"},
+      //{"", 0, "/var/run/redis.sock", "slc360"}
   };
-  RedisConfig config((const RedisEndpoint *)endpoints,
-                     sizeof(endpoints) / sizeof(RedisEndpoint), num_redis_socks,
-                     10000, 5000, 1);
+
+  RedisConfig config = {(RedisEndpoint *)&endpoints,
+                        (sizeof(endpoints) / sizeof(RedisEndpoint)),
+                        num_redis_socks,
+                        connect_timeout,
+                        net_readwrite_timeout,
+                        connect_failure_retry_delay};
+
   RedisClient client(config);
 
   // while (1) test(client);
