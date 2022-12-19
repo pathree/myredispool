@@ -76,7 +76,7 @@ void *run(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  int num_redis_socks = 10;
+  int num_redis_socks = 2;
   const RedisEndpoint endpoints[] = {
       {"127.0.0.1", 6379, "slc360"},
       //{"/var/run/redis.sock", "slc360"}
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
 
   // while (1) test(client);
 
-  int num_of_thread = 10;
+  int num_of_thread = 2;
   pthread_t tid[num_of_thread];
   for (int i = 0; i < num_of_thread; i++) {
     pthread_create(&tid[i], NULL, run, &client);

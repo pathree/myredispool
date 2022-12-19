@@ -20,8 +20,8 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
     reply = socket->redis_vcommand(inst_->config(), format, ap);
   } else {
     printf(
-        "Can not get socket from redis connection pool, server down? or not "
-        "enough connection?\n");
+        "Can not get socket from redis connection pool, "
+        "server down or not enough connection\n");
   }
 
   inst_->push_socket(socket);
@@ -76,13 +76,6 @@ int RedisInstance::create_pool() {
     RedisSocket *socket = new RedisSocket(i);
     socket->set_backup(i % config_->num_endpoints());
 
-    int rcode = pthread_mutex_init(&socket->mutex(), NULL);
-    if (rcode != 0) {
-      printf("Failed to init lock: returns (%d)\n", rcode);
-      delete socket;
-      return -1;
-    }
-
     if (socket->connect(config_) != 0) {
       connect_after_ = time(NULL) + config_->connect_failure_retry_delay();
       printf("Failed to connect to any redis server\n");
@@ -105,12 +98,15 @@ void RedisInstance::destory_pool() {
 }
 
 /**
- * @brief search a available socket from pool by thread lock
+ * @brief 从连接池中找到一个空闲的RedisSocket
+ * 连接池是一个临界资源，多线程中需要加锁
+ * 加锁的方式有两种：
+ * 1、一个全局锁，每次进入时锁上退出时释放，缺点是获取锁时可能重连操作导致线程阻塞
+ * 2、每个Socket一个锁，好处时并发性能更好，代价是所有的socket都要被try_lock一次
  *
  * @return RedisSocket* the return value should not be close
  */
 RedisSocket *RedisInstance::pop_socket() {
-  int rcode;
   int num_tried_to_connect = 0;
   int num_faild_to_connected = 0;
 
@@ -121,19 +117,10 @@ RedisSocket *RedisInstance::pop_socket() {
      *
      *  If it isn't used, then grab it ourselves.
      */
-    if ((rcode = pthread_mutex_trylock(&socket->mutex())) != 0)
+    if (!socket->mutex().try_lock())
       continue;
     else /* else we now have the lock */
       printf("Obtained lock with socket #%d\n", socket->id());
-
-    if (socket->inuse() == 1) {
-      if ((rcode = pthread_mutex_unlock(&socket->mutex())) != 0)
-        printf("Failed release lock with socket #%d: returns (%d)\n",
-               socket->id(), rcode);
-      else
-        printf("Released lock with socket #%d\n", socket->id());
-    } else
-      socket->set_inuse(1);
 
     /*
      *  If we happen upon an unconnected socket, and
@@ -156,14 +143,8 @@ RedisSocket *RedisInstance::pop_socket() {
       printf("Ignoring unconnected socket #%d ...\n", socket->id());
       num_faild_to_connected++;
 
-      socket->set_inuse(0);
-
-      if ((rcode = pthread_mutex_unlock(&socket->mutex())) != 0) {
-        printf("Failed to release lock with socket #%d: returns (%d)\n",
-               socket->id(), rcode);
-      } else {
-        printf("Released lock with socket #%d\n", socket->id());
-      }
+      socket->mutex().unlock();
+      printf("Released lock with socket #%d\n", socket->id());
 
       continue;
     }
@@ -201,22 +182,10 @@ RedisSocket *RedisInstance::pop_socket() {
 }
 
 void RedisInstance::push_socket(RedisSocket *socket) {
-  int rcode;
-
   if (socket == NULL) return;
 
-  if (socket->inuse() != 1) {
-    printf("I'm NOT in use while pushing. Bug?\n");
-  }
-
-  socket->set_inuse(0);
-
-  if ((rcode = pthread_mutex_unlock(&socket->mutex())) != 0) {
-    printf("Can not release lock with socket %d: returns (%d)\n", socket->id(),
-           rcode);
-  } else {
-    printf("Released lock with socket %d\n", socket->id());
-  }
+  socket->mutex().unlock();
+  printf("Released lock with socket #%d\n", socket->id());
 
   printf("Pushed redis socket #%d\n", socket->id());
 
@@ -336,15 +305,7 @@ void RedisSocket::close() {
     redisFree(ctx_);
   }
 
-  if (inuse_) {
-    printf("I'm still in use while closing. Bug?\n");
-  }
-
-  int rcode = pthread_mutex_destroy(&mutex_);
-  if (rcode != 0) {
-    printf("Failed to destroy lock: returns (%d)\n", rcode);
-  }
-
+  mutex_.unlock();
   return;
 }
 

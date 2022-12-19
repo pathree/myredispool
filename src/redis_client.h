@@ -17,6 +17,7 @@
 
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -101,7 +102,7 @@ class RedisConfig {
 class RedisSocket {
  public:
   enum SocketStatus { unconnected = 0, connected };
-  RedisSocket(int id) : id_(id), inuse_(0), state_(unconnected), ctx_(NULL) {}
+  RedisSocket(int id) : id_(id), state_(unconnected), ctx_(NULL) {}
   ~RedisSocket() { close(); }
 
   int connect(const RedisConfig* config);
@@ -113,16 +114,13 @@ class RedisSocket {
   int id() { return id_; }
   int backup() { return backup_; }
   void set_backup(int backup) { backup_ = backup; }
-  int inuse() { return inuse_; }
-  void set_inuse(int inuse) { inuse_ = inuse; }
   int state() { return state_; }
-  pthread_mutex_t& mutex() { return mutex_; }
+  std::mutex& mutex() { return mutex_; }
 
  private:
   int id_;      // socket序号
   int backup_;  // 备用endpoints序号
-  pthread_mutex_t mutex_;
-  int inuse_;
+  std::mutex mutex_;
   enum SocketStatus state_;
   redisContext* ctx_;
 };
@@ -192,12 +190,11 @@ class RedisReply {
  public:
   explicit RedisReply() {}
   explicit RedisReply(void* reply) {
-    ptr_.reset((redisReply*)reply,
-               [](redisReply* r) { /*引用计数为0时，调用删除器释放redisReply*/
-                                   printf("Released redis reply %p\n",
-                                          (void*)r);
-                                   freeReplyObject(r);
-               });
+    ptr_.reset((redisReply*)reply, [](redisReply* r) {
+      /*引用计数为0时，调用删除器释放redisReply*/
+      // printf("Released redis reply %p\n", (void*)r);
+      freeReplyObject(r);
+    });
   }
 
   redisReply* operator->() const { return ptr_.get(); }
