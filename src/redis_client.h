@@ -16,6 +16,7 @@
 #include <stdarg.h>
 
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -182,41 +183,30 @@ class RedisInstance {
 
 /**
  * @brief
- * 实现了一个类似std::unique_ptr的智能指针，封装了redisReply并在退出时自动释放。因为实现了move
- * construtor，根据c++11规范，copy constructor和copy
- * assignment自动被禁止，需要使用std::move转化为右值，例如
- * RedisReplyPtr reply2 = std::move(reply);
+ * 把redisReply封装到RedisReply对象中,
+ * 放入到共享智能指针std::shared_ptr避免RedisReply对象析构过程中被释放
+ * 当引用计数为0时才释放redisReply
+ * 参考《Effective C++》条款31
  */
-class RedisReplyPtr {
+class RedisReply {
  public:
-  explicit RedisReplyPtr(void* p = 0) : p_((redisReply*)p) {}
-  ~RedisReplyPtr() {
-    if (p_) {
-      printf("Released redis reply %p\n", (void*)p_);
-      freeReplyObject(p_);
-    }
+  explicit RedisReply() {}
+  explicit RedisReply(void* reply) {
+    ptr_.reset((redisReply*)reply,
+               [](redisReply* r) { /*引用计数为0时，调用删除器释放redisReply*/
+                                   printf("Released redis reply %p\n",
+                                          (void*)r);
+                                   freeReplyObject(r);
+               });
   }
 
-  // move contructor
-  RedisReplyPtr(RedisReplyPtr&& rhs) noexcept {
-    p_ = rhs.p_;
-    rhs.p_ = NULL;
-  }
+  redisReply* operator->() const { return ptr_.get(); }
+  redisReply* operator&() const { return ptr_.get(); }
 
-  // move assignment
-  RedisReplyPtr& operator=(RedisReplyPtr&& rhs) noexcept {
-    if (this == &rhs) return *this;
-    p_ = rhs.p_;
-    rhs.p_ = NULL;
-    return *this;
-  }
-
-  redisReply* operator->() const { return p_; }
-  redisReply& operator*() const { return *p_; }
-  operator bool() const { return p_; }
+  operator bool() const { return ptr_.get(); }
 
  private:
-  redisReply* p_;
+  std::shared_ptr<redisReply> ptr_;
 };
 
 /**
@@ -244,8 +234,8 @@ class RedisClient {
   // connection and then release the connection to pool.
   // the command's reply is returned as a smart pointer,
   // which can be used just like raw redisReply pointer.
-  RedisReplyPtr redisCommand(const char* format, ...);
-  RedisReplyPtr redisvCommand(const char* format, va_list ap);
+  RedisReply redisCommand(const char* format, ...);
+  RedisReply redisvCommand(const char* format, va_list ap);
 
  private:
   RedisClient(const RedisClient&);

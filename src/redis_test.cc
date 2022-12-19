@@ -1,3 +1,6 @@
+#include <string.h>
+#include <unistd.h>
+
 #include <iostream>
 #include <string>
 
@@ -6,23 +9,36 @@
 using std::cout;
 using std::string;
 
+void sleep_awhile(int ms) {
+  struct timeval delay_time;
+
+  memset(&delay_time, 0, sizeof(struct timeval));
+  delay_time.tv_sec += ms / 1000;
+  delay_time.tv_usec = (ms % 1000) * 1000;
+
+  select(0, NULL, NULL, NULL, &delay_time);
+  return;
+}
+
 void test(RedisClient &client) {
   {
     std::cout << "Press <ENTER> to continue..." << std::endl;
     std::cin.get();
 
-    RedisReplyPtr reply = client.redisCommand("SET %s %s", "key0", "value0");
+    RedisReply reply = client.redisCommand("SET %s %s", "key0", "value0");
     if (reply)
       std::cout << "SET: " << reply->str << std::endl;
     else
       std::cout << "SET: Something wrong." << std::endl;
   }
 
+  sleep_awhile(1);
+
   {
     std::cout << "Press <ENTER> to continue..." << std::endl;
     std::cin.get();
 
-    RedisReplyPtr reply = client.redisCommand("GET %s", "key0");
+    RedisReply reply = client.redisCommand("GET %s", "key0");
     if (reply)
       if (reply->type == REDIS_REPLY_NIL)
         std::cout << "GET: Key does not exist." << std::endl;
@@ -39,21 +55,20 @@ void *run(void *arg) {
 
   const string key = std::to_string(std::rand());
   const string value = std::to_string(std::rand());
-  RedisReplyPtr reply =
+  RedisReply reply =
       client->redisCommand("SET %s %s", key.c_str(), value.c_str());
   if (reply)
-    std::cout << "SET: " << value << std::endl;
+    std::cout << "SET: " << value << " on " << &reply << std::endl;
   else
     std::cout << "SET: Something wrong." << std::endl;
 
   reply = client->redisCommand("GET %s", key.c_str());
-  if (reply)
+  if (reply) {
     if (reply->type == REDIS_REPLY_NIL)
       std::cout << "GET: Key does not exist." << std::endl;
-    else {
-      std::cout << "GET: " << reply->str << std::endl;
-    }
-  else
+    else
+      std::cout << "GET: " << reply->str << " on " << &reply << std::endl;
+  } else
     std::cout << "GET: "
               << "Something wrong." << std::endl;
 

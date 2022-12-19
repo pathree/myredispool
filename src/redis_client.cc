@@ -1,8 +1,8 @@
 
 #include "redis_client.h"
 
-RedisReplyPtr RedisClient::redisCommand(const char *format, ...) {
-  RedisReplyPtr reply;
+RedisReply RedisClient::redisCommand(const char *format, ...) {
+  RedisReply reply;
   va_list ap;
 
   va_start(ap, format);
@@ -12,7 +12,7 @@ RedisReplyPtr RedisClient::redisCommand(const char *format, ...) {
   return reply;
 }
 
-RedisReplyPtr RedisClient::redisvCommand(const char *format, va_list ap) {
+RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
   void *reply = 0;
 
   RedisSocket *socket = inst_->pop_socket();
@@ -26,7 +26,7 @@ RedisReplyPtr RedisClient::redisvCommand(const char *format, va_list ap) {
 
   inst_->push_socket(socket);
 
-  return RedisReplyPtr(reply);
+  return RedisReply(reply);
 }
 
 int RedisClient::create_inst(const RedisConfig &config) {
