@@ -67,25 +67,32 @@ struct RedisConfig {
 class RedisSocket {
  public:
   enum SocketStatus { unconnected = 0, connected };
+  enum SocketType { ipsocket = 0, unixsocket };
+
   RedisSocket(int id) : id_(id), state_(unconnected), ctx_(NULL) {}
-  ~RedisSocket() { close(); }
+  ~RedisSocket() { disconnect(); }
 
   int connect(const RedisConfig* config);
-  void close();
+  void disconnect();
 
   void* redis_vcommand(const RedisConfig* config, const char* format,
                        va_list ap);
 
   int id() { return id_; }
+  int master() { return master_; }
   int backup() { return backup_; }
+  void set_master(int master) { master_ = master; }
   void set_backup(int backup) { backup_ = backup; }
+
   int state() { return state_; }
   std::mutex& mutex() { return mutex_; }
 
  private:
   int id_;      // socket序号
-  int backup_;  // 备用endpoints序号
+  int master_;  // 当前endpoint序号
+  int backup_;  // 备用endpoint序号
   std::mutex mutex_;
+  enum SocketType type_;
   enum SocketStatus state_;
   redisContext* ctx_;
 };

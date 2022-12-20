@@ -44,11 +44,6 @@ int RedisClient::create_inst(const RedisConfig &config) {
     return -1;
   }
 
-  printf(
-      "Attempting to connect to above endpoints with connect_timeout %dms "
-      "net_readwrite_timeout %dms\n",
-      config.connect_timeout, config.net_readwrite_timeout);
-
   inst = new RedisInstance(config);
 
   if (inst->create_pool() < 0) {
@@ -78,6 +73,8 @@ RedisInstance::RedisInstance(const RedisConfig &config) {
 
     config_->endpoints = endpoints;
   }
+
+  connect_after_ = 0;
 }
 
 RedisInstance::~RedisInstance() {
@@ -91,10 +88,17 @@ RedisInstance::~RedisInstance() {
 }
 
 int RedisInstance::create_pool() {
-  connect_after_ = 0;
+  printf(
+      "Attempting to connect to endpoints with connect_timeout %dms "
+      "net_readwrite_timeout %dms\n",
+      config_->connect_timeout, config_->net_readwrite_timeout);
+  for (int i = 0; i < config_->num_endpoints; i++)
+    printf("[%d] %s:%d %s\n", i, config_->endpoints[i].host,
+           config_->endpoints[i].port, config_->endpoints[i].unix_path);
 
   for (int i = 0; i < config_->num_redis_socks; i++) {
     RedisSocket *socket = new RedisSocket(i);
+    socket->set_master(i % config_->num_endpoints);
     socket->set_backup(i % config_->num_endpoints);
 
     if (socket->connect(config_) != 0) {
@@ -154,6 +158,7 @@ RedisSocket *RedisInstance::pop_socket() {
       printf("Trying to (re)connect unconnected socket #%d ...\n",
              socket->id());
       num_tried_to_connect++;
+
       if (socket->connect(config_) != 0) {
         connect_after_ = time(NULL) + config_->connect_failure_retry_delay;
       }
@@ -171,7 +176,8 @@ RedisSocket *RedisInstance::pop_socket() {
     }
 
     /* should be connected, grab it */
-    printf("Poped redis socket #%d\n", socket->id());
+    printf("Poped redis socket #%d @%d-%d\n", socket->id(), socket->master(),
+           socket->backup());
     if (num_faild_to_connected != 0 || num_tried_to_connect != 0) {
       printf(
           "Got socket #%d after skipping %d unconnected sockets, "
@@ -180,25 +186,17 @@ RedisSocket *RedisInstance::pop_socket() {
     }
 
     /*
-     *  The socket is returned in the locked
-     *  state.
-     *
-     *  We also remember where we left off,
-     *  so that the next search can start from
-     *  here.
-     *
-     *  Note that multiple threads MAY over-write
-     *  the 'inst->last_used' variable.  This is OK,
-     *  as it's a pointer only used for reading.
+     *  The socket is returned in the locked state.
      */
-    // inst->last_used = socket->next;
     return socket;
   }
 
   /* We get here if every redis socket is unconnected and
    * unconnectABLE, or in use */
-  printf("There are no redis sockets to use! skipped %d, tried to connect %d\n",
-         num_faild_to_connected, num_tried_to_connect);
+  printf(
+      "There are no redis sockets to use while skipped %d unconnected sockets, "
+      "tried to connect %d\n",
+      num_faild_to_connected, num_tried_to_connect);
   return NULL;
 }
 
@@ -208,7 +206,8 @@ void RedisInstance::push_socket(RedisSocket *socket) {
   socket->mutex().unlock();
   x_debug_lock("Released lock of socket #%d\n", socket->id());
 
-  printf("Pushed redis socket #%d\n", socket->id());
+  printf("Pushed redis socket #%d @%d-%d\n", socket->id(), socket->master(),
+         socket->backup());
 
   return;
 }
@@ -229,8 +228,6 @@ int RedisSocket::connect(const RedisConfig *config) {
   redisContext *ctx = NULL;
   struct timeval timeout[2];
 
-  printf("Attempting to connect #%d @%d\n", id_, backup_);
-
   /* convert timeout (ms) to timeval */
   timeout[0].tv_sec = config->connect_timeout / 1000;
   timeout[0].tv_usec = 1000 * (config->connect_timeout % 1000);
@@ -238,21 +235,26 @@ int RedisSocket::connect(const RedisConfig *config) {
   timeout[1].tv_usec = 1000 * (config->net_readwrite_timeout % 1000);
 
   for (i = 0; i < config->num_endpoints; i++) {
+    if (master_ != backup_) master_ = backup_;
+    printf("Attempting to connect #%d @%d\n", id_, master_);
+
     /*
      * Get the target host/port or unix path from the backup index
      */
-    const char *unix_path = config->endpoints[backup_].unix_path;
+    const char *unix_path = config->endpoints[master_].unix_path;
     if (unix_path[0]) {
       ctx = redisConnectUnixWithTimeout(unix_path, timeout[0]);
+      type_ = unixsocket;
     } else {
-      const char *host = config->endpoints[backup_].host;
-      int port = config->endpoints[backup_].port;
+      const char *host = config->endpoints[master_].host;
+      int port = config->endpoints[master_].port;
       ctx = redisConnectWithTimeout(host, port, timeout[0]);
+      type_ = ipsocket;
     }
 
     while (ctx && ctx->err == 0) {
-      // Redis authentication,
-      const char *authpwd = config->endpoints[backup_].authpwd;
+      // Redis authentication
+      const char *authpwd = config->endpoints[master_].authpwd;
       if (authpwd[0]) {
         redisReply *r = (redisReply *)redisCommand(ctx, "AUTH %s", authpwd);
         if (r == NULL || r->type == REDIS_REPLY_ERROR) {
@@ -266,12 +268,12 @@ int RedisSocket::connect(const RedisConfig *config) {
         if (r) freeReplyObject(r);
       }
 
-      printf("Connected new redis socket #%d @%d\n", id_, backup_);
+      printf("Connected new redis socket #%d @%d\n", id_, master_);
       ctx_ = ctx;
       state_ = connected;
       if (config->num_endpoints > 1) {
         /* Select the next _random_ endpoint as the new backup if succeed*/
-        backup_ = (backup_ + (1 + rand() % (config->num_endpoints - 1))) %
+        backup_ = (master_ + (1 + rand() % (config->num_endpoints - 1))) %
                   config->num_endpoints;
       }
 
@@ -280,7 +282,7 @@ int RedisSocket::connect(const RedisConfig *config) {
                (ctx->flags & REDIS_BLOCK), ctx->errstr);
       }
 
-      if (!unix_path[0]) {
+      if (type_ == ipsocket) {
         if (redisEnableKeepAlive(ctx) != REDIS_OK) {
           printf("Failed to enable keepalive: %s\n", ctx->errstr);
         }
@@ -291,18 +293,18 @@ int RedisSocket::connect(const RedisConfig *config) {
 
     /* We have more backups to try */
     if (ctx) {
-      printf("Failed to connect redis socket #%d @%d: %s\n", id_, backup_,
+      printf("Failed to connect redis socket #%d @%d: %s\n", id_, master_,
              ctx->errstr);
       redisFree(ctx);
     } else {
-      printf("Failed to allocate redis socket #%d @%d\n", id_, backup_);
+      printf("Failed to allocate redis socket #%d @%d\n", id_, master_);
     }
 
     /* We have tried the last one but still fail */
     if (i == config->num_endpoints - 1) break;
 
     /* Select the next endpoint as the new backup to retry if failed*/
-    backup_ = (backup_ + 1) % config->num_endpoints;
+    backup_ = (master_ + 1) % config->num_endpoints;
   }
 
   /*
@@ -318,14 +320,15 @@ int RedisSocket::connect(const RedisConfig *config) {
  * @brief disconnect to redis server
  * free redisContext and release thread lock
  */
-void RedisSocket::close() {
-  printf("Closing redis socket #%d @%d, state=%d\n", id_, backup_, state_);
+void RedisSocket::disconnect() {
+  printf("Disconnect redis socket #%d @%d, state=%d\n", id_, master_, state_);
 
   if (state_ == connected) {
     redisFree(ctx_);
+    ctx_ = NULL;
   }
 
-  mutex_.unlock();
+  state_ = unconnected;
   return;
 }
 
@@ -341,11 +344,6 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
   if (reply == NULL) {
     /* Once an error is returned the context cannot be reused and you shoud
        set up a new connection.
-     */
-
-    /* 如果使用unix socket成功建立redisContext, 在redis server down后,
-     * 重用redisContext上执行命令, 会导致hiredis库崩溃. 因此，使用unix
-     * socket方式不适合做连接池
      */
 
     printf("Failed to redisvCommand\n");
@@ -367,5 +365,13 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
   }
 
   va_end(ap2);
+
+  /*
+   使用unix socket成功建立redisContext后, 如果redis server down,
+   在已有的redisContext上执行命令会导致hiredis库崩溃.
+   因此，使用unix socket每次命令后都要关闭redisContext
+  */
+  if (type_ == unixsocket) disconnect();
+
   return reply;
 }

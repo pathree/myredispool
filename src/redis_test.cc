@@ -76,16 +76,14 @@ void *run(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  int num_redis_socks = 1;
+  int num_redis_socks = 3;
   int connect_timeout = 5000;           // ms
   int net_readwrite_timeout = 1000;     // ms
   int connect_failure_retry_delay = 1;  // seconds
 
-  RedisEndpoint endpoints[] = {
-      {"127.0.0.1", 6379, "", "slc360"},
-      //{"127.0.0.1", 6380, "", "slc360"},
-      //{"", 0, "/var/run/redis.sock", "slc360"}
-  };
+  RedisEndpoint endpoints[] = {{"127.0.0.1", 6379, "", "slc360"},
+                               {"127.0.0.1", 6379, "", "slc360"},
+                               {"", 0, "/var/run/redis.sock", "slc360"}};
 
   RedisConfig config = {(RedisEndpoint *)&endpoints,
                         (sizeof(endpoints) / sizeof(RedisEndpoint)),
