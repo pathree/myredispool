@@ -277,8 +277,8 @@ int RedisSocket::connect(const RedisConfig *config) {
       state_ = connected;
       if (config->num_endpoints > 1) {
         /* Select the next _random_ endpoint as the new backup if succeed*/
-        backup_ = (master_ + (1 + rand() % (config->num_endpoints - 1))) %
-                  config->num_endpoints;
+        srandom(time(NULL));
+        backup_ = random() % config->num_endpoints;
       }
 
       if (redisSetTimeout(ctx, timeout[1]) != REDIS_OK) {

@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
 
   RedisClient client(config);
 
-  // while (1) test(client);
+  while (1) test(client);
 
   int num_of_thread = num_redis_socks;
   pthread_t tid[num_of_thread];
