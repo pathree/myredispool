@@ -72,7 +72,7 @@ void *run(void *arg) {
     std::cout << "GET: "
               << "Something wrong." << std::endl;
 
-  return NULL;
+  return nullptr;
 }
 
 int main(int argc, char **argv) {

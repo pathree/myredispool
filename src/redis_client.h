@@ -69,7 +69,7 @@ class RedisSocket {
   enum SocketStatus { unconnected = 0, connected };
   enum SocketType { ipsocket = 0, unixsocket };
 
-  RedisSocket(int id) : id_(id), state_(unconnected), ctx_(NULL) {}
+  RedisSocket(int id) : id_(id), state_(unconnected), ctx_(nullptr) {}
   ~RedisSocket() { disconnect(); }
 
   int connect(const RedisConfig* config);
@@ -160,13 +160,13 @@ class RedisReply {
 class RedisClient {
  public:
   RedisClient(const RedisConfig& config) {
-    inst_ = NULL;
+    inst_ = nullptr;
     create_inst(config);
   }
 
   ~RedisClient() {
     destroy_inst();
-    inst_ = NULL;
+    inst_ = nullptr;
   }
 
   // ----------------------------------------------------

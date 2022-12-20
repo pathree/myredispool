@@ -13,7 +13,7 @@ RedisReply RedisClient::redisCommand(const char *format, ...) {
 }
 
 RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
-  void *reply = 0;
+  void *reply = nullptr;
 
   /*
    * 使用智能共享指针封装RedisSocket，并自定义Lambda删除器，避免调用析构函数
@@ -33,7 +33,7 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
 }
 
 int RedisClient::create_inst(const RedisConfig &config) {
-  RedisInstance *inst = NULL;
+  RedisInstance *inst = nullptr;
 
   /* Check config */
   if (config.num_endpoints < 1) {
@@ -59,9 +59,9 @@ int RedisClient::create_inst(const RedisConfig &config) {
 }
 
 void RedisClient::destroy_inst() {
-  if (inst_ != NULL) {
+  if (inst_ != nullptr) {
     delete inst_;
-    inst_ = NULL;
+    inst_ = nullptr;
   }
 }
 
@@ -81,10 +81,10 @@ RedisInstance::RedisInstance(const RedisConfig &config) {
 }
 
 RedisInstance::~RedisInstance() {
-  if (config_ != NULL) {
-    if (config_->endpoints != NULL) delete[] config_->endpoints;
+  if (config_ != nullptr) {
+    if (config_->endpoints != nullptr) delete[] config_->endpoints;
     delete config_;
-    config_ = NULL;
+    config_ = nullptr;
   }
 
   destory_pool();
@@ -105,7 +105,7 @@ int RedisInstance::create_pool() {
     socket->set_backup(i % config_->num_endpoints);
 
     if (socket->connect(config_) != 0) {
-      connect_after_ = time(NULL) + config_->connect_failure_retry_delay;
+      connect_after_ = time(nullptr) + config_->connect_failure_retry_delay;
       printf("Failed to connect to any redis server\n");
     }
 
@@ -157,13 +157,13 @@ RedisSocket *RedisInstance::pop_socket() {
      *  connect it.  This should be really rare.
      */
     if ((socket->state() == RedisSocket::unconnected) &&
-        (time(NULL) > connect_after_)) {
+        (time(nullptr) > connect_after_)) {
       printf("Trying to (re)connect unconnected socket #%d ...\n",
              socket->id());
       num_tried_to_connect++;
 
       if (socket->connect(config_) != 0) {
-        connect_after_ = time(NULL) + config_->connect_failure_retry_delay;
+        connect_after_ = time(nullptr) + config_->connect_failure_retry_delay;
       }
     }
 
@@ -201,11 +201,11 @@ RedisSocket *RedisInstance::pop_socket() {
       "sockets, "
       "tried to connect %d\n",
       num_faild_to_connected, num_tried_to_connect);
-  return NULL;
+  return nullptr;
 }
 
 void RedisInstance::push_socket(RedisSocket *socket) {
-  if (socket == NULL) return;
+  if (socket == nullptr) return;
 
   socket->mutex().unlock();
   x_debug_lock("Released lock of socket #%d\n", socket->id());
@@ -229,7 +229,7 @@ void RedisInstance::push_socket(RedisSocket *socket) {
  */
 int RedisSocket::connect(const RedisConfig *config) {
   int i;
-  redisContext *ctx = NULL;
+  redisContext *ctx = nullptr;
   struct timeval timeout[2];
 
   /* convert timeout (ms) to timeval */
@@ -261,7 +261,7 @@ int RedisSocket::connect(const RedisConfig *config) {
       const char *authpwd = config->endpoints[master_].authpwd;
       if (authpwd[0]) {
         redisReply *r = (redisReply *)redisCommand(ctx, "AUTH %s", authpwd);
-        if (r == NULL || r->type == REDIS_REPLY_ERROR) {
+        if (r == nullptr || r->type == REDIS_REPLY_ERROR) {
           if (r) {
             printf("Failed to auth: %s\n", r->str);
             freeReplyObject(r);
@@ -314,7 +314,7 @@ int RedisSocket::connect(const RedisConfig *config) {
   /*
    *  Error, or SERVER_DOWN.
    */
-  ctx_ = NULL;
+  ctx_ = nullptr;
   state_ = unconnected;
 
   return -1;
@@ -329,7 +329,7 @@ void RedisSocket::disconnect() {
 
   if (state_ == connected) {
     redisFree(ctx_);
-    ctx_ = NULL;
+    ctx_ = nullptr;
   }
 
   state_ = unconnected;
@@ -339,13 +339,13 @@ void RedisSocket::disconnect() {
 void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
                                   va_list ap) {
   va_list ap2;
-  void *reply = NULL;
+  void *reply = nullptr;
 
   va_copy(ap2, ap);  // copy va_list for reconnection
 
   /* forward to hiredis API */
   reply = redisvCommand(ctx_, format, ap);
-  if (reply == NULL) {
+  if (reply == nullptr) {
     /* Once an error is returned the context cannot be reused and you shoud
        set up a new connection.
      */
@@ -359,7 +359,7 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
     if (connect(config) == 0) {
       /* retry on the newly connected socket */
       reply = redisvCommand(ctx_, format, ap2);
-      if (reply == NULL) {
+      if (reply == nullptr) {
         printf("Failed after reconnect: %s (%d)\n", ctx_->errstr, ctx_->err);
         /* do not need clean up here because the next caller will retry. */
       }
