@@ -76,7 +76,7 @@ void *run(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  int num_redis_socks = 3;
+  int num_redis_socks = 1;
   int connect_timeout = 5000;           // ms
   int net_readwrite_timeout = 1000;     // ms
   int connect_failure_retry_delay = 1;  // seconds

@@ -15,7 +15,12 @@ RedisReply RedisClient::redisCommand(const char *format, ...) {
 RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
   void *reply = 0;
 
-  RedisSocket *socket = inst_->pop_socket();
+  /*
+   * 使用智能共享指针封装RedisSocket，并自定义Lambda删除器，避免调用析构函数
+   */
+  std::shared_ptr<RedisSocket> socket(
+      inst_->pop_socket(),
+      [this](RedisSocket *socket) { inst_->push_socket(socket); });
   if (socket) {
     reply = socket->redis_vcommand(inst_->config(), format, ap);
   } else {
@@ -23,8 +28,6 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
         "Can not get socket from redis connection pool, "
         "server down or not enough connection\n");
   }
-
-  inst_->push_socket(socket);
 
   return RedisReply(reply);
 }
@@ -194,7 +197,8 @@ RedisSocket *RedisInstance::pop_socket() {
   /* We get here if every redis socket is unconnected and
    * unconnectABLE, or in use */
   printf(
-      "There are no redis sockets to use while skipped %d unconnected sockets, "
+      "There are no redis sockets to use while skipped %d unconnected "
+      "sockets, "
       "tried to connect %d\n",
       num_faild_to_connected, num_tried_to_connect);
   return NULL;
