@@ -53,9 +53,9 @@ inline const char* log_level(int lv) { return lv_str[lv]; }
     gettimeofday(&tv, NULL);                                                 \
     localtime_r(&tv.tv_sec, &tm);                                            \
     if (lv <= LOG_DEBUG)                                                     \
-      printf("[%02d:%02d:%02d.%03d] [%s] [%ld] " fmt, tm.tm_hour, tm.tm_min, \
-             tm.tm_sec, (int)tv.tv_usec / 1000, log_level(lv),               \
-             syscall(SYS_gettid), ##__VA_ARGS__);                            \
+      printf("[%02d:%02d:%02d.%06d] [%s] [%ld] " fmt, tm.tm_hour, tm.tm_min, \
+             tm.tm_sec, (int)tv.tv_usec, log_level(lv), syscall(SYS_gettid), \
+             ##__VA_ARGS__);                                                 \
   } while (0)
 
 /**
@@ -128,7 +128,7 @@ class RedisSocket {
  */
 class RedisInstance {
  public:
-  RedisInstance(const RedisConfig& config);
+  RedisInstance(const RedisConfig* config);
   ~RedisInstance();
 
   const RedisConfig* config() const { return config_; }
@@ -184,14 +184,9 @@ class RedisReply {
  */
 class RedisClient {
  public:
-  RedisClient(const RedisConfig& config) {
-    inst_ = nullptr;
-    create_inst(config);
-  }
-
-  ~RedisClient() {
-    destroy_inst();
-    inst_ = nullptr;
+  static RedisClient& inst(const RedisConfig* config = nullptr) {
+    static RedisClient instance(config);
+    return instance;
   }
 
   // ----------------------------------------------------
@@ -210,7 +205,17 @@ class RedisClient {
   RedisClient(const RedisClient&);
   RedisClient& operator=(const RedisClient&);
 
-  int create_inst(const RedisConfig& config);
+  RedisClient(const RedisConfig* config) {
+    inst_ = nullptr;
+    create_inst(config);
+  }
+
+  ~RedisClient() {
+    destroy_inst();
+    inst_ = nullptr;
+  }
+
+  int create_inst(const RedisConfig* config);
   void destroy_inst();
 
   RedisInstance* inst_;

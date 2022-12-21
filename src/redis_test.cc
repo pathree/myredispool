@@ -19,12 +19,13 @@ void sleep_awhile(int ms) {
   return;
 }
 
-void test(RedisClient &client) {
+void test() {
   {
     std::cout << "Press <ENTER> to continue..." << std::endl;
     std::cin.get();
 
-    RedisReply reply = client.redisCommand("SET %s %s", "key0", "value0");
+    RedisReply reply =
+        RedisClient::inst().redisCommand("SET %s %s", "key0", "value0");
     if (reply)
       std::cout << "SET: " << reply->str << std::endl;
     else
@@ -35,7 +36,7 @@ void test(RedisClient &client) {
     std::cout << "Press <ENTER> to continue..." << std::endl;
     std::cin.get();
 
-    RedisReply reply = client.redisCommand("GET %s", "key0");
+    RedisReply reply = RedisClient::inst().redisCommand("GET %s", "key0");
     if (reply)
       if (reply->type == REDIS_REPLY_NIL)
         std::cout << "GET: Key does not exist." << std::endl;
@@ -48,12 +49,10 @@ void test(RedisClient &client) {
 }
 
 void *run(void *arg) {
-  RedisClient *client = (RedisClient *)arg;
-
   const string key = std::to_string(std::rand());
   const string value = std::to_string(std::rand());
   RedisReply reply =
-      client->redisCommand("SET %s %s", key.c_str(), value.c_str());
+      RedisClient::inst().redisCommand("SET %s %s", key.c_str(), value.c_str());
   if (reply)
     std::cout << "SET: " << value << " OK" << std::endl;
   else
@@ -61,7 +60,7 @@ void *run(void *arg) {
 
   // sleep_awhile(100);
 
-  reply = client->redisCommand("GET %s", key.c_str());
+  reply = RedisClient::inst().redisCommand("GET %s", key.c_str());
   if (reply) {
     if (reply->type == REDIS_REPLY_NIL)
       std::cout << "GET: Key does not exist." << std::endl;
@@ -73,15 +72,7 @@ void *run(void *arg) {
   return nullptr;
 }
 
-#define LOG3(lv, fmt, ...) \
-  printf("[%d]<%s:%s>:" fmt "\r\n", lv, __FILE__, __FUNCTION__, ##__VA_ARGS__)
-
 int main(int argc, char **argv) {
-  const char *str = "hello";
-  int num = 10086;
-  LOG3(5, "this is test __VA_ARGS__:%s, %d", str, num);
-  // return 0;
-
   int num_redis_socks = 1;
   int connect_timeout = 5000;           // ms
   int net_readwrite_timeout = 1000;     // ms
@@ -94,7 +85,6 @@ int main(int argc, char **argv) {
   RedisEndpoint endpoints[] = {{"127.0.0.1", 6379, "", "slc360"},
                                {"127.0.0.1", 6379, "", "slc360"},
                                {"", 0, "/var/run/redis.sock", "slc360"}};
-
   RedisConfig config = {(RedisEndpoint *)&endpoints,
                         (sizeof(endpoints) / sizeof(RedisEndpoint)),
                         num_redis_socks,
@@ -102,14 +92,14 @@ int main(int argc, char **argv) {
                         net_readwrite_timeout,
                         connect_failure_retry_delay};
 
-  RedisClient client(config);
+  RedisClient::inst(&config);
 
-  // while (1) test(client);
+  while (1) test();
 
   int num_of_thread = num_redis_socks;
   pthread_t tid[num_of_thread];
   for (int i = 0; i < num_of_thread; i++) {
-    pthread_create(&tid[i], NULL, run, &client);
+    pthread_create(&tid[i], NULL, run, NULL);
   }
 
   for (int i = 0; i < num_of_thread; i++) {

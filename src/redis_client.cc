@@ -32,19 +32,19 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
   return RedisReply(reply);
 }
 
-int RedisClient::create_inst(const RedisConfig &config) {
+int RedisClient::create_inst(const RedisConfig *config) {
   RedisInstance *inst = nullptr;
 
   /* Check config */
-  if (config.num_endpoints < 1) {
+  if (config->num_endpoints < 1) {
     x_debug(LOG_NOTICE, "Must provide 1 redis endpoint\n");
     return -1;
   }
 
-  if (config.num_redis_socks > MAX_REDIS_SOCKS) {
+  if (config->num_redis_socks > MAX_REDIS_SOCKS) {
     x_debug(LOG_NOTICE,
             "Number of redis sockets(% d) cannot exceed MAX_REDIS_SOCKS(% d)\n",
-            config.num_redis_socks, MAX_REDIS_SOCKS);
+            config->num_redis_socks, MAX_REDIS_SOCKS);
     return -1;
   }
 
@@ -66,13 +66,13 @@ void RedisClient::destroy_inst() {
   }
 }
 
-RedisInstance::RedisInstance(const RedisConfig &config) {
-  config_ = new RedisConfig(config);
+RedisInstance::RedisInstance(const RedisConfig *config) {
+  config_ = new RedisConfig(*config);
 
-  if (config.num_endpoints > 0) {
-    RedisEndpoint *endpoints = new RedisEndpoint[config.num_endpoints];
-    for (int i = 0; i < config.num_endpoints; i++) {
-      endpoints[i] = config.endpoints[i];
+  if (config->num_endpoints > 0) {
+    RedisEndpoint *endpoints = new RedisEndpoint[config->num_endpoints];
+    for (int i = 0; i < config->num_endpoints; i++) {
+      endpoints[i] = config->endpoints[i];
     }
 
     config_->endpoints = endpoints;
