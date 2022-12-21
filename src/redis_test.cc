@@ -6,7 +6,6 @@
 
 #include "redis_client.h"
 
-using std::cout;
 using std::string;
 
 void sleep_awhile(int ms) {
@@ -31,8 +30,6 @@ void test(RedisClient &client) {
     else
       std::cout << "SET: Something wrong." << std::endl;
   }
-
-  sleep_awhile(1);
 
   {
     std::cout << "Press <ENTER> to continue..." << std::endl;
@@ -62,6 +59,8 @@ void *run(void *arg) {
   else
     std::cout << "SET: Something wrong." << std::endl;
 
+  // sleep_awhile(100);
+
   reply = client->redisCommand("GET %s", key.c_str());
   if (reply) {
     if (reply->type == REDIS_REPLY_NIL)
@@ -69,17 +68,28 @@ void *run(void *arg) {
     else
       std::cout << "GET: " << reply->str << " OK" << std::endl;
   } else
-    std::cout << "GET: "
-              << "Something wrong." << std::endl;
+    std::cout << "GET: Something wrong." << std::endl;
 
   return nullptr;
 }
 
+#define LOG3(lv, fmt, ...) \
+  printf("[%d]<%s:%s>:" fmt "\r\n", lv, __FILE__, __FUNCTION__, ##__VA_ARGS__)
+
 int main(int argc, char **argv) {
+  const char *str = "hello";
+  int num = 10086;
+  LOG3(5, "this is test __VA_ARGS__:%s, %d", str, num);
+  // return 0;
+
   int num_redis_socks = 1;
   int connect_timeout = 5000;           // ms
   int net_readwrite_timeout = 1000;     // ms
   int connect_failure_retry_delay = 1;  // seconds
+
+  if (argc >= 2) {
+    num_redis_socks = atoi(argv[1]);
+  }
 
   RedisEndpoint endpoints[] = {{"127.0.0.1", 6379, "", "slc360"},
                                {"127.0.0.1", 6379, "", "slc360"},
@@ -94,7 +104,7 @@ int main(int argc, char **argv) {
 
   RedisClient client(config);
 
-  while (1) test(client);
+  // while (1) test(client);
 
   int num_of_thread = num_redis_socks;
   pthread_t tid[num_of_thread];

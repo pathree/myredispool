@@ -14,6 +14,9 @@
 
 #include <pthread.h>
 #include <stdarg.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <memory>
@@ -27,11 +30,33 @@ using std::string;
 
 #define MAX_REDIS_SOCKS 1000
 
-// #define x_debug_lock(...) printf(__VA_ARGS__)
-#define x_debug_lock(...)
-// #define x_debug_reply(...) printf(__VA_ARGS__)
-#define x_debug_reply(...)
-#define x_debug_socket(...) printf(__VA_ARGS__)
+enum LOG_LEVEL {
+  LOG_EMERG = 0,
+  LOG_ALERT = 1,
+  LOG_CRIT = 2,
+  LOG_ERR = 3,
+  LOG_WARNING = 4,
+  LOG_NOTICE = 5,
+  LOG_INFO = 6,
+  LOG_DEBUG = 7
+};
+
+const static char* lv_str[] = {"EME", "ALE", "CRIT", "ERR",
+                               "WAR", "NOT", "INF",  "DBG"};
+
+inline const char* log_level(int lv) { return lv_str[lv]; }
+
+#define x_debug(lv, fmt, ...)                                                \
+  do {                                                                       \
+    struct timeval tv;                                                       \
+    struct tm tm;                                                            \
+    gettimeofday(&tv, NULL);                                                 \
+    localtime_r(&tv.tv_sec, &tm);                                            \
+    if (lv <= LOG_DEBUG)                                                     \
+      printf("[%02d:%02d:%02d.%03d] [%s] [%ld] " fmt, tm.tm_hour, tm.tm_min, \
+             tm.tm_sec, (int)tv.tv_usec / 1000, log_level(lv),               \
+             syscall(SYS_gettid), ##__VA_ARGS__);                            \
+  } while (0)
 
 /**
  * @brief Redis服务端点
@@ -136,10 +161,10 @@ class RedisReply {
  public:
   explicit RedisReply() {}
   explicit RedisReply(void* reply) {
-    x_debug_reply("Got redis reply %p\n", (void*)reply);
+    x_debug(LOG_DEBUG, "Got redis reply %p\n", (void*)reply);
     ptr_.reset((redisReply*)reply, [](redisReply* reply) {
       /*引用计数为0时，调用删除器释放redisReply*/
-      x_debug_reply("Released redis reply %p\n", reply);
+      x_debug(LOG_DEBUG, "Released redis reply %p\n", reply);
       freeReplyObject(reply);
     });
   }
