@@ -1,6 +1,9 @@
 
 #include "redis_client.h"
 
+const char *lv_str[] = {"EME", "ALE", "CRIT", "ERR",
+                        "WAR", "NOT", "INF",  "DBG"};
+
 RedisReply RedisClient::redisCommand(const char *format, ...) {
   RedisReply reply;
   va_list ap;

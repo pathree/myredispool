@@ -41,10 +41,7 @@ enum LOG_LEVEL {
   LOG_DEBUG = 7
 };
 
-const static char* lv_str[] = {"EME", "ALE", "CRIT", "ERR",
-                               "WAR", "NOT", "INF",  "DBG"};
-
-inline const char* log_level(int lv) { return lv_str[lv]; }
+extern const char* lv_str[];
 
 #define x_debug(lv, fmt, ...)                                                \
   do {                                                                       \
@@ -54,7 +51,7 @@ inline const char* log_level(int lv) { return lv_str[lv]; }
     localtime_r(&tv.tv_sec, &tm);                                            \
     if (lv <= LOG_DEBUG)                                                     \
       printf("[%02d:%02d:%02d.%06d] [%s] [%ld] " fmt, tm.tm_hour, tm.tm_min, \
-             tm.tm_sec, (int)tv.tv_usec, log_level(lv), syscall(SYS_gettid), \
+             tm.tm_sec, (int)tv.tv_usec, lv_str[lv], syscall(SYS_gettid),    \
              ##__VA_ARGS__);                                                 \
   } while (0)
 
