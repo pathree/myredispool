@@ -27,9 +27,9 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
   if (socket) {
     reply = socket->redis_vcommand(inst_->config(), format, ap);
   } else {
-    x_debug(LOG_NOTICE,
-            "Can not get socket from redis connection pool, "
-            "server down or not enough connection\n");
+    x_notice(
+        "Can not get socket from redis connection pool, "
+        "server down or not enough connection\n");
   }
 
   return RedisReply(reply);
@@ -40,14 +40,14 @@ int RedisClient::create_inst(const RedisConfig *config) {
 
   /* Check config */
   if (config->num_endpoints < 1) {
-    x_debug(LOG_NOTICE, "Must provide 1 redis endpoint\n");
+    x_notice("Must provide 1 redis endpoint\n");
     return -1;
   }
 
   if (config->num_redis_socks > MAX_REDIS_SOCKS) {
-    x_debug(LOG_NOTICE,
-            "Number of redis sockets(% d) cannot exceed MAX_REDIS_SOCKS(% d)\n",
-            config->num_redis_socks, MAX_REDIS_SOCKS);
+    x_notice(
+        "Number of redis sockets(% d) cannot exceed MAX_REDIS_SOCKS(% d)\n",
+        config->num_redis_socks, MAX_REDIS_SOCKS);
     return -1;
   }
 
@@ -95,13 +95,13 @@ RedisInstance::~RedisInstance() {
 }
 
 int RedisInstance::create_pool() {
-  x_debug(LOG_NOTICE,
-          "Attempting to connect to endpoints with connect_timeout %dms "
-          "net_readwrite_timeout %dms\n",
-          config_->connect_timeout, config_->net_readwrite_timeout);
+  x_notice(
+      "Attempting to connect to endpoints with connect_timeout %dms "
+      "net_readwrite_timeout %dms\n",
+      config_->connect_timeout, config_->net_readwrite_timeout);
   for (int i = 0; i < config_->num_endpoints; i++)
-    x_debug(LOG_NOTICE, "[%d] %s:%d %s\n", i, config_->endpoints[i].host,
-            config_->endpoints[i].port, config_->endpoints[i].unix_path);
+    x_notice("[%d] %s:%d %s\n", i, config_->endpoints[i].host,
+             config_->endpoints[i].port, config_->endpoints[i].unix_path);
 
   for (int i = 0; i < config_->num_redis_socks; i++) {
     RedisSocket *socket = new RedisSocket(i);
@@ -110,7 +110,7 @@ int RedisInstance::create_pool() {
 
     if (socket->connect(config_) != 0) {
       connect_after_ = time(nullptr) + config_->connect_failure_retry_delay;
-      x_debug(LOG_NOTICE, "Failed to connect to any redis server\n");
+      x_notice("Failed to connect to any redis server\n");
     }
 
     /* Add this socket to the list of sockets */
@@ -152,7 +152,7 @@ RedisSocket *RedisInstance::pop_socket() {
     if (!socket->mutex().try_lock())
       continue;
     else /* else we now have the lock */
-      x_debug(LOG_DEBUG, "Obtained lock of socket #%d\n", socket->id());
+      x_debug("Obtained lock of socket #%d\n", socket->id());
 
     /*
      *  If we happen upon an unconnected socket, and
@@ -162,8 +162,8 @@ RedisSocket *RedisInstance::pop_socket() {
      */
     if ((socket->state() == RedisSocket::unconnected) &&
         (time(nullptr) > connect_after_)) {
-      x_debug(LOG_NOTICE, "Trying to (re)connect unconnected socket #%d ...\n",
-              socket->id());
+      x_notice("Trying to (re)connect unconnected socket #%d ...\n",
+               socket->id());
       num_tried_to_connect++;
 
       if (socket->connect(config_) != 0) {
@@ -173,24 +173,23 @@ RedisSocket *RedisInstance::pop_socket() {
 
     /* if we still aren't connected, ignore this socket */
     if (socket->state() == RedisSocket::unconnected) {
-      x_debug(LOG_NOTICE, "Ignoring unconnected socket #%d ...\n",
-              socket->id());
+      x_notice("Ignoring unconnected socket #%d ...\n", socket->id());
       num_faild_to_connected++;
 
       socket->mutex().unlock();
-      x_debug(LOG_DEBUG, "Released lock of socket #%d\n", socket->id());
+      x_debug("Released lock of socket #%d\n", socket->id());
 
       continue;
     }
 
     /* should be connected, grab it */
-    x_debug(LOG_NOTICE, "Poped redis socket #%d @%d-%d\n", socket->id(),
-            socket->master(), socket->backup());
+    x_notice("Poped redis socket #%d @%d-%d\n", socket->id(), socket->master(),
+             socket->backup());
     if (num_faild_to_connected != 0 || num_tried_to_connect != 0) {
-      x_debug(LOG_NOTICE,
-              "Got socket #%d after skipping %d unconnected sockets, "
-              "tried to reconnect %d though\n",
-              socket->id(), num_faild_to_connected, num_tried_to_connect);
+      x_notice(
+          "Got socket #%d after skipping %d unconnected sockets, "
+          "tried to reconnect %d though\n",
+          socket->id(), num_faild_to_connected, num_tried_to_connect);
     }
 
     /*
@@ -201,11 +200,11 @@ RedisSocket *RedisInstance::pop_socket() {
 
   /* We get here if every redis socket is unconnected and
    * unconnectABLE, or in use */
-  x_debug(LOG_NOTICE,
-          "There are no redis sockets to use while skipped %d unconnected "
-          "sockets, "
-          "tried to connect %d\n",
-          num_faild_to_connected, num_tried_to_connect);
+  x_notice(
+      "There are no redis sockets to use while skipped %d unconnected "
+      "sockets, "
+      "tried to connect %d\n",
+      num_faild_to_connected, num_tried_to_connect);
   return nullptr;
 }
 
@@ -213,10 +212,10 @@ void RedisInstance::push_socket(RedisSocket *socket) {
   if (socket == nullptr) return;
 
   socket->mutex().unlock();
-  x_debug(LOG_DEBUG, "Released lock of socket #%d\n", socket->id());
+  x_debug("Released lock of socket #%d\n", socket->id());
 
-  x_debug(LOG_NOTICE, "Pushed redis socket #%d @%d-%d\n", socket->id(),
-          socket->master(), socket->backup());
+  x_notice("Pushed redis socket #%d @%d-%d\n", socket->id(), socket->master(),
+           socket->backup());
 
   return;
 }
@@ -245,7 +244,7 @@ int RedisSocket::connect(const RedisConfig *config) {
 
   for (i = 0; i < config->num_endpoints; i++) {
     if (master_ != backup_) master_ = backup_;
-    x_debug(LOG_NOTICE, "Attempting to connect #%d @%d\n", id_, master_);
+    x_notice("Attempting to connect #%d @%d\n", id_, master_);
 
     /*
      * Get the target host/port or unix path from the backup index
@@ -268,7 +267,8 @@ int RedisSocket::connect(const RedisConfig *config) {
         redisReply *r = (redisReply *)redisCommand(ctx, "AUTH %s", authpwd);
         if (r == nullptr || r->type == REDIS_REPLY_ERROR) {
           if (r) {
-            x_debug(LOG_NOTICE, "Failed to auth: %s\n", r->str);
+            x_notice("Failed to auth socket #%d @%d: %s\n", id_, master_,
+                     r->str);
             freeReplyObject(r);
           }
           break;
@@ -277,7 +277,7 @@ int RedisSocket::connect(const RedisConfig *config) {
         if (r) freeReplyObject(r);
       }
 
-      x_debug(LOG_NOTICE, "Connected new redis socket #%d @%d\n", id_, master_);
+      x_notice("Connected new redis socket #%d @%d\n", id_, master_);
       ctx_ = ctx;
       state_ = connected;
       if (config->num_endpoints > 1) {
@@ -287,27 +287,26 @@ int RedisSocket::connect(const RedisConfig *config) {
       }
 
       if (redisSetTimeout(ctx, timeout[1]) != REDIS_OK) {
-        x_debug(LOG_NOTICE, "Failed to set timeout: blocking-mode: %d, %s\n",
-                (ctx->flags & REDIS_BLOCK), ctx->errstr);
+        x_notice("Failed to set timeout: blocking-mode: %d, %s\n",
+                 (ctx->flags & REDIS_BLOCK), ctx->errstr);
       }
 
       if (type_ == ipsocket) {
         if (redisEnableKeepAlive(ctx) != REDIS_OK) {
-          x_debug(LOG_NOTICE, "Failed to enable keepalive: %s\n", ctx->errstr);
+          x_notice("Failed to enable keepalive: %s\n", ctx->errstr);
         }
       }
 
-      return 0;
+      return 0; /*connect OK*/
     }
 
     /* We have more backups to try */
     if (ctx) {
-      x_debug(LOG_NOTICE, "Failed to connect redis socket #%d @%d: %s\n", id_,
-              master_, ctx->errstr);
+      x_notice("Failed to connect redis socket #%d @%d: %s\n", id_, master_,
+               ctx->errstr);
       redisFree(ctx);
     } else {
-      x_debug(LOG_NOTICE, "Failed to allocate redis socket #%d @%d\n", id_,
-              master_);
+      x_notice("Failed to allocate redis socket #%d @%d\n", id_, master_);
     }
 
     /* We have tried the last one but still fail */
@@ -331,8 +330,7 @@ int RedisSocket::connect(const RedisConfig *config) {
  * free redisContext and release thread lock
  */
 void RedisSocket::disconnect() {
-  x_debug(LOG_NOTICE, "Disconnect redis socket #%d @%d, state=%d\n", id_,
-          master_, state_);
+  x_notice("Disconnect redis socket #%d @%d, state=%d\n", id_, master_, state_);
 
   if (state_ == connected) {
     redisFree(ctx_);
@@ -357,7 +355,7 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
        set up a new connection.
      */
 
-    x_debug(LOG_NOTICE, "Failed to redisvCommand\n");
+    x_notice("Failed to redisvCommand\n");
 
     /* close the socket that failed */
     redisFree(ctx_);
@@ -367,12 +365,11 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
       /* retry on the newly connected socket */
       reply = redisvCommand(ctx_, format, ap2);
       if (reply == nullptr) {
-        x_debug(LOG_NOTICE, "Failed after reconnect: %s (%d)\n", ctx_->errstr,
-                ctx_->err);
+        x_notice("Failed after reconnect: %s (%d)\n", ctx_->errstr, ctx_->err);
         /* do not need clean up here because the next caller will retry. */
       }
     } else {
-      x_debug(LOG_NOTICE, "Reconnect failed, maybe server down\n");
+      x_notice("Reconnect failed, maybe server down\n");
     }
   }
 

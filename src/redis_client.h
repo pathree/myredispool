@@ -43,17 +43,25 @@ enum LOG_LEVEL {
 
 extern const char* lv_str[];
 
-#define x_debug(lv, fmt, ...)                                                \
-  do {                                                                       \
-    struct timeval tv;                                                       \
-    struct tm tm;                                                            \
-    gettimeofday(&tv, NULL);                                                 \
-    localtime_r(&tv.tv_sec, &tm);                                            \
-    if (lv <= LOG_DEBUG)                                                     \
-      printf("[%02d:%02d:%02d.%06d] [%s] [%ld] " fmt, tm.tm_hour, tm.tm_min, \
-             tm.tm_sec, (int)tv.tv_usec, lv_str[lv], syscall(SYS_gettid),    \
-             ##__VA_ARGS__);                                                 \
+#define x_print(lv, fmt, ...)                                            \
+  do {                                                                   \
+    if (lv > LOG_INFO) break;                                            \
+    struct timeval tv;                                                   \
+    struct tm t;                                                         \
+    gettimeofday(&tv, NULL);                                             \
+    localtime_r(&tv.tv_sec, &t);                                         \
+    char buf[1024] = {0};                                                \
+    int n = snprintf(buf, 1023, "[%02d:%02d:%02d.%06d] [%s] [%ld] " fmt, \
+                     t.tm_hour, t.tm_min, t.tm_sec, (int)tv.tv_usec,     \
+                     lv_str[lv], syscall(SYS_gettid), ##__VA_ARGS__);    \
+    if (buf[n - 1] != '\n') buf[n] = '\n';                               \
+    printf(buf);                                                         \
   } while (0)
+
+#define x_error(fmt, ...) x_print(LOG_ERR, fmt, ##__VA_ARGS__)
+#define x_notice(fmt, ...) x_print(LOG_NOTICE, fmt, ##__VA_ARGS__)
+#define x_info(fmt, ...) x_print(LOG_INFO, fmt, ##__VA_ARGS__)
+#define x_debug(fmt, ...) x_print(LOG_DEBUG, fmt, ##__VA_ARGS__)
 
 /**
  * @brief Redis服务端点
@@ -158,21 +166,21 @@ class RedisReply {
  public:
   explicit RedisReply() {}
   explicit RedisReply(void* reply) {
-    x_debug(LOG_DEBUG, "Got redis reply %p\n", (void*)reply);
-    ptr_.reset((redisReply*)reply, [](redisReply* reply) {
+    x_print(LOG_DEBUG, "Got redis reply %p\n", (void*)reply);
+    reply_.reset((redisReply*)reply, [](redisReply* reply) {
       /*引用计数为0时，调用删除器释放redisReply*/
-      x_debug(LOG_DEBUG, "Released redis reply %p\n", reply);
+      x_print(LOG_DEBUG, "Released redis reply %p\n", reply);
       freeReplyObject(reply);
     });
   }
 
-  redisReply* operator->() const { return ptr_.get(); }
-  redisReply* operator&() const { return ptr_.get(); }
+  redisReply* operator->() const { return reply_.get(); }
+  redisReply* operator&() const { return reply_.get(); }
 
-  operator bool() const { return ptr_.get(); }
+  operator bool() const { return reply_.get(); }
 
  private:
-  std::shared_ptr<redisReply> ptr_;
+  std::shared_ptr<redisReply> reply_;
 };
 
 /**
