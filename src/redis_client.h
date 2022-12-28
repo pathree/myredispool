@@ -12,8 +12,6 @@
 #ifndef REDIS_CLIENT_H_
 #define REDIS_CLIENT_H_
 
-#include <pthread.h>
-#include <stdarg.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <unistd.h>
