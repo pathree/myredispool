@@ -4,6 +4,8 @@
 #include "redis_client.h"
 #include "redis_utils.h"
 
+namespace myredis {
+
 int redis_set(const string &key, const string &value, int expire) {
   if (key.empty() || value.empty()) return REDIS_ERR;
 
@@ -63,3 +65,5 @@ int redis_get(const string &key, string &value, int del) {
 
   return REDIS_OK;
 }
+
+}  // namespace myredis

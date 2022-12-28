@@ -7,6 +7,7 @@
 #include "redis_client.h"
 #include "redis_utils.h"
 
+using namespace myredis;
 using std::string;
 
 void sleep_awhile(int ms) {
@@ -83,8 +84,6 @@ int main(int argc, char **argv) {
     num_redis_socks = atoi(argv[1]);
   }
 
-  x_info("Start...\n");
-
   RedisEndpoint endpoints[] = {{"127.0.0.1", 6379, "", "slc360"},
                                {"127.0.0.1", 6379, "", "slc360"},
                                {"", 0, "/var/run/redis.sock", "slc360"}};
@@ -97,9 +96,9 @@ int main(int argc, char **argv) {
 
   RedisClient::inst(&config);
 
-  redis_set("aaa", "123456");
+  myredis::redis_set("aaa", "123456");
   string value;
-  redis_get("aaa", value);
+  myredis::redis_get("aaa", value);
 
   return 0;
 

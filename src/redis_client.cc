@@ -1,9 +1,8 @@
 
-
 #include "redis_client.h"
+#include "redis_log.h"
 
-const char *lv_str[] = {"EME", "ALE", "CRIT", "ERR",
-                        "WAR", "NOT", "INF",  "DBG"};
+namespace myredis {
 
 RedisReply RedisClient::redisCommand(const char *format, ...) {
   RedisReply reply;
@@ -385,3 +384,5 @@ void *RedisSocket::redis_vcommand(const RedisConfig *config, const char *format,
 
   return reply;
 }
+
+}  // namespace myredis
