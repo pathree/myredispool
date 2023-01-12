@@ -75,7 +75,7 @@ void *run(void *arg) {
 }
 
 int main(int argc, char **argv) {
-  int num_redis_socks = 1;
+  int num_redis_socks = 3;
   int connect_timeout = 5000;           // ms
   int net_readwrite_timeout = 1000;     // ms
   int connect_failure_retry_delay = 1;  // seconds
@@ -95,14 +95,9 @@ int main(int argc, char **argv) {
                         connect_failure_retry_delay};
 
   RedisClient::inst(&config);
+  // RedisClient::inst().reset_config(&config);
 
-  myredis::redis_set("aaa", "123456");
-  string value;
-  myredis::redis_get("aaa", value);
-
-  return 0;
-
-  while (1) test();
+  // while (1) test();
 
   int num_of_thread = num_redis_socks;
   pthread_t tid[num_of_thread];

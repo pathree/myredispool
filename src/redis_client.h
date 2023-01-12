@@ -26,8 +26,6 @@ using std::string;
 
 namespace myredis {
 
-#define MAX_REDIS_SOCKS 1000
-
 /**
  * @brief Redis服务端点
  *    + 支持地址端口和UnixSocket接入
@@ -108,7 +106,7 @@ class RedisInstance {
     connect_after_ = connect_after;
   }
 
-  int create_pool();
+  void create_pool();
   void destory_pool();
 
   RedisSocket* pop_socket();
@@ -159,6 +157,8 @@ class RedisClient {
     return instance;
   }
 
+  void reset_config(const RedisConfig* config) { create_inst(config); }
+
   // ----------------------------------------------------
   // Thread-safe command
   // ----------------------------------------------------
@@ -175,19 +175,13 @@ class RedisClient {
   RedisClient(const RedisClient&);
   RedisClient& operator=(const RedisClient&);
 
-  RedisClient(const RedisConfig* config) {
-    inst_ = nullptr;
-    create_inst(config);
-  }
+  RedisClient(const RedisConfig* config) { create_inst(config); }
+  ~RedisClient() { destroy_inst(); }
 
-  ~RedisClient() {
-    destroy_inst();
-    inst_ = nullptr;
-  }
-
-  int create_inst(const RedisConfig* config);
+  void create_inst(const RedisConfig* config);
   void destroy_inst();
 
+  const int kMaxRedisSocks = 1000;
   RedisInstance* inst_;
 };
 

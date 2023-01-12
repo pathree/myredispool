@@ -18,6 +18,8 @@ RedisReply RedisClient::redisCommand(const char *format, ...) {
 RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
   void *reply = nullptr;
 
+  if (inst_ == nullptr) return RedisReply(reply);
+
   /*
    * 使用智能共享指针封装RedisSocket，并自定义Lambda删除器，避免调用析构函数
    */
@@ -35,35 +37,32 @@ RedisReply RedisClient::redisvCommand(const char *format, va_list ap) {
   return RedisReply(reply);
 }
 
-int RedisClient::create_inst(const RedisConfig *config) {
+void RedisClient::create_inst(const RedisConfig *config) {
   RedisInstance *inst = nullptr;
+
+  if (config == nullptr) return;
 
   /* Check config */
   if (config->num_endpoints < 1) {
     x_notice("Must provide 1 redis endpoint\n");
-    return -1;
+    return;
   }
 
-  if (config->num_redis_socks > MAX_REDIS_SOCKS) {
-    x_notice(
-        "Number of redis sockets(% d) cannot exceed MAX_REDIS_SOCKS(% d)\n",
-        config->num_redis_socks, MAX_REDIS_SOCKS);
-    return -1;
+  if (config->num_redis_socks > kMaxRedisSocks) {
+    x_notice("Number of redis sockets(%d) cannot exceed(%d)\n",
+             config->num_redis_socks, kMaxRedisSocks);
+    return;
   }
 
   inst = new RedisInstance(config);
-
-  if (inst->create_pool() < 0) {
-    delete inst;
-    return -1;
+  if (inst) {
+    if (inst_) delete inst_;
+    inst_ = inst;
   }
-
-  inst_ = inst;
-  return 0;
 }
 
 void RedisClient::destroy_inst() {
-  if (inst_ != nullptr) {
+  if (inst_) {
     delete inst_;
     inst_ = nullptr;
   }
@@ -82,6 +81,8 @@ RedisInstance::RedisInstance(const RedisConfig *config) {
   }
 
   connect_after_ = 0;
+
+  create_pool();
 }
 
 RedisInstance::~RedisInstance() {
@@ -94,7 +95,7 @@ RedisInstance::~RedisInstance() {
   destory_pool();
 }
 
-int RedisInstance::create_pool() {
+void RedisInstance::create_pool() {
   x_notice(
       "Attempting to connect to endpoints with connect_timeout %dms "
       "net_readwrite_timeout %dms\n",
@@ -116,8 +117,6 @@ int RedisInstance::create_pool() {
     /* Add this socket to the list of sockets */
     pool_.push_back(socket);
   }
-
-  return 0;
 }
 
 void RedisInstance::destory_pool() {
